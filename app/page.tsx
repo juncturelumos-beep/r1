@@ -975,9 +975,9 @@ export default function Home() {
 		}
 	};
 
-	// Fallback audio using Web Audio API (works on Raspberry Pi)
+	// Enhanced fallback audio using Web Audio API (works on Raspberry Pi)
 	const playFallbackAudio = async (text: string) => {
-		console.log('🔊 Playing fallback audio for text:', text);
+		console.log('🔊 Playing enhanced fallback audio for text:', text);
 		
 		if (!fallbackAudioContext) {
 			console.log('🔊 Creating audio context on demand...');
@@ -1000,7 +1000,7 @@ export default function Home() {
 					setAiResponse(text);
 					setTimeout(() => setAiResponse(''), 4000);
 				}
-			}, 100);
+			}, 200); // Reduced delay for better responsiveness
 			return;
 		}
 
@@ -1031,17 +1031,17 @@ export default function Home() {
 		}
 	};
 
-	// Internal function to actually play the audio
+	// Enhanced internal function to actually play the audio with better stability
 	const playFallbackAudioInternal = (text: string) => {
 		try {
 			// Calculate speech duration based on text length (natural speech rate)
 			const wordsPerMinute = 150; // Natural speech rate
 			const wordCount = text.split(' ').length;
-			const speechDuration = Math.max(1, (wordCount / wordsPerMinute) * 60); // Minimum 1 second
+			const speechDuration = Math.max(1.5, (wordCount / wordsPerMinute) * 60); // Minimum 1.5 seconds
 			
-			console.log(`🔊 Playing ${speechDuration}s of audio for ${wordCount} words`);
+			console.log(`🔊 Playing ${speechDuration.toFixed(1)}s of enhanced audio for ${wordCount} words`);
 			
-			// Create more sophisticated voice-like audio
+			// Create more sophisticated voice-like audio with better stability
 			const oscillator = fallbackAudioContext!.createOscillator();
 			const gainNode = fallbackAudioContext!.createGain();
 			const filterNode = fallbackAudioContext!.createBiquadFilter();
@@ -1051,12 +1051,12 @@ export default function Home() {
 			filterNode.connect(gainNode);
 			gainNode.connect(fallbackAudioContext!.destination);
 			
-			// Voice-like characteristics
+			// Voice-like characteristics with better stability
 			filterNode.type = 'lowpass';
 			filterNode.frequency.setValueAtTime(800, fallbackAudioContext!.currentTime);
 			filterNode.Q.setValueAtTime(1, fallbackAudioContext!.currentTime);
 			
-			// Dynamic frequency changes to simulate speech patterns
+			// Dynamic frequency changes to simulate speech patterns with better timing
 			const baseFreq = 220; // A3 note - pleasant voice-like frequency
 			const freqVariations = [0, 2, -2, 4, -4, 2, 0, -2]; // Musical intervals
 			
@@ -1070,31 +1070,38 @@ export default function Home() {
 				// Set frequency for this segment
 				oscillator.frequency.setValueAtTime(freq, time);
 				
-				// Set volume envelope (attack, sustain, release)
+				// Set volume envelope (attack, sustain, release) with better stability
 				const segmentDuration = timeStep * 0.8; // 80% of segment for sound
 				const fadeIn = timeStep * 0.1; // 10% fade in
 				const fadeOut = timeStep * 0.1; // 10% fade out
 				
 				// Fade in
 				gainNode.gain.setValueAtTime(0, time);
-				gainNode.gain.linearRampToValueAtTime(0.4, time + fadeIn);
+				gainNode.gain.linearRampToValueAtTime(0.3, time + fadeIn); // Reduced volume for stability
 				
 				// Sustain
-				gainNode.gain.setValueAtTime(0.4, time + fadeIn);
+				gainNode.gain.setValueAtTime(0.3, time + fadeIn);
 				
 				// Fade out
 				gainNode.gain.linearRampToValueAtTime(0, time + segmentDuration);
 			}
 			
-			// Start and stop the oscillator
-			oscillator.start(fallbackAudioContext!.currentTime);
-			oscillator.stop(fallbackAudioContext!.currentTime + speechDuration);
-			
-			console.log('🔊 Enhanced fallback audio playing successfully');
-			
-			// Show text response since audio is limited
-			setAiResponse(text);
-			setTimeout(() => setAiResponse(''), Math.max(4000, speechDuration * 1000));
+			// Start and stop the oscillator with better error handling
+			try {
+				oscillator.start(fallbackAudioContext!.currentTime);
+				oscillator.stop(fallbackAudioContext!.currentTime + speechDuration);
+				
+				console.log('🔊 Enhanced fallback audio playing successfully');
+				
+				// Show text response since audio is limited
+				setAiResponse(text);
+				setTimeout(() => setAiResponse(''), Math.max(4000, speechDuration * 1000));
+				
+			} catch (oscillatorError) {
+				console.error('❌ Oscillator error:', oscillatorError);
+				// Fall back to simple beep
+				playSimpleFallbackAudio(text);
+			}
 			
 		} catch (error) {
 			console.error('❌ Enhanced fallback audio internal failed:', error);
@@ -1103,29 +1110,55 @@ export default function Home() {
 		}
 	};
 
-	// Simple fallback audio as backup
+	// Enhanced simple fallback audio with better stability
 	const playSimpleFallbackAudio = (text: string) => {
-		try {
-			const oscillator = fallbackAudioContext!.createOscillator();
-			const gainNode = fallbackAudioContext!.createGain();
-			
-			oscillator.connect(gainNode);
-			gainNode.connect(fallbackAudioContext!.destination);
-			
-			// Simple beep pattern
-			oscillator.frequency.setValueAtTime(440, fallbackAudioContext!.currentTime);
-			gainNode.gain.setValueAtTime(0.3, fallbackAudioContext!.currentTime);
-			
-			oscillator.start(fallbackAudioContext!.currentTime);
-			oscillator.stop(fallbackAudioContext!.currentTime + 0.5);
-			
-			// Show text response
+		console.log('🔊 Playing simple fallback audio for text:', text);
+		
+		if (!fallbackAudioContext) {
+			console.log('🔊 No audio context available for simple fallback');
 			setAiResponse(text);
 			setTimeout(() => setAiResponse(''), 4000);
+			return;
+		}
+
+		try {
+			// Create a simple, stable beep sound
+			const oscillator = fallbackAudioContext.createOscillator();
+			const gainNode = fallbackAudioContext.createGain();
+			
+			// Connect audio nodes
+			oscillator.connect(gainNode);
+			gainNode.connect(fallbackAudioContext.destination);
+			
+			// Set stable audio parameters
+			oscillator.frequency.setValueAtTime(440, fallbackAudioContext.currentTime); // A4 note
+			oscillator.frequency.setValueAtTime(660, fallbackAudioContext.currentTime + 0.5); // E5 note
+			gainNode.gain.setValueAtTime(0, fallbackAudioContext.currentTime);
+			gainNode.gain.linearRampToValueAtTime(0.2, fallbackAudioContext.currentTime + 0.1); // Reduced volume for stability
+			gainNode.gain.setValueAtTime(0.2, fallbackAudioContext.currentTime + 0.4);
+			gainNode.gain.linearRampToValueAtTime(0, fallbackAudioContext.currentTime + 0.6);
+			
+			// Start and stop with better error handling
+			try {
+				oscillator.start(fallbackAudioContext.currentTime);
+				oscillator.stop(fallbackAudioContext.currentTime + 0.8);
+				
+				console.log('🔊 Simple fallback audio playing successfully');
+				
+				// Show text response
+				setAiResponse(text);
+				setTimeout(() => setAiResponse(''), 4000);
+				
+			} catch (oscillatorError) {
+				console.error('❌ Simple oscillator error:', oscillatorError);
+				// Last resort - just show text
+				setAiResponse(text);
+				setTimeout(() => setAiResponse(''), 4000);
+			}
 			
 		} catch (error) {
-			console.error('❌ Simple fallback audio also failed:', error);
-			// Last resort: just show text
+			console.error('❌ Simple fallback audio failed:', error);
+			// Last resort - just show text
 			setAiResponse(text);
 			setTimeout(() => setAiResponse(''), 4000);
 		}
@@ -1224,8 +1257,10 @@ export default function Home() {
 		
 		// Set up event handlers (reuse the same logic from main useEffect)
 		recognition.onstart = () => {
+			console.log('🎤 Recognition started - listening active')
 			setIsListening(true)
-			isStartingRef.current = false
+			isStartingRef.current = false // Reset starting flag
+			isStoppingRef.current = false // Reset stopping flag
 			finalTranscriptRef.current = ''
 			setTranscript('')
 		}
@@ -1239,12 +1274,17 @@ export default function Home() {
 			let interim = ''
 			let final = ''
 			
-			for (let i = event.resultIndex; i < event.results.length; ++i) {
-				if (event.results[i].isFinal) {
-					final += event.results[i][0].transcript
-				} else {
-					interim += event.results[i][0].transcript
+			try {
+				for (let i = event.resultIndex; i < event.results.length; ++i) {
+					if (event.results[i].isFinal) {
+						final += event.results[i][0].transcript
+					} else {
+						interim += event.results[i][0].transcript
+					}
 				}
+			} catch (e) {
+				console.error('Error processing recognition results:', e)
+				return
 			}
 			
 			finalTranscriptRef.current = final
@@ -1260,54 +1300,73 @@ export default function Home() {
 				silenceTimeoutRef.current = setTimeout(() => {
 					const current = finalTranscriptRef.current || interim
 					if (current.trim() && !isProcessing && !isSpeaking) {
+						console.log('🎤 Processing interim result after silence:', current)
 						handleSendToGemini(current)
 					}
-				}, 1000) // Wait 1 second of silence
+				}, 1500) // Increased to 1.5 seconds for better stability
 			}
 			
 			// If we have final results, process immediately
 			if (final.trim() && !isProcessing && !isSpeaking) {
+				console.log('🎤 Processing final result:', final)
 				handleSendToGemini(final)
 			}
 		}
 		
 		recognition.onend = () => {
-			console.log('Recognition ended')
+			console.log('🎤 Recognition ended - checking if should restart')
 			setIsListening(false)
-			isStartingRef.current = false
-			isStoppingRef.current = false
+			isStartingRef.current = false // Reset starting flag
+			isStoppingRef.current = false // Reset stopping flag
 			
-			// Auto-restart if we should still be listening and no audio is playing
-			if (shouldListenRef.current && !isSpeaking && !isProcessing && !isAudioPlaying) {
-				console.log('Auto-restarting recognition...')
-				setTimeout(() => {
-					if (canStartRecognition() && !isAudioPlaying) {
-						startRecognition()
-					}
-				}, 2000)
-			}
-		}
-		
-		recognition.onerror = (event: any) => {
-
-			setIsListening(false)
-			isStartingRef.current = false
-			isStoppingRef.current = false
-			
-			// Handle specific error types
-			if (event.error === 'not-allowed') {
-
-				return
-			}
-			
-			// Restart on other errors if we should still be listening
+			// Auto-restart if we should still be listening, but with longer delay
 			if (shouldListenRef.current && !isSpeaking && !isProcessing) {
-
+				console.log('🔄 Auto-restarting recognition after delay')
+				// Use a much longer delay to avoid rapid restart loops
 				setTimeout(() => {
 					if (canStartRecognition()) {
 						startRecognition()
 					}
-				}, 3000) // Longer delay for error recovery
+				}, 3000) // Increased delay for better stability
+			}
+		}
+		
+		recognition.onerror = (event: any) => {
+			console.error('🎤 Recognition error:', event.error)
+			setIsListening(false)
+			isStartingRef.current = false // Reset starting flag
+			isStoppingRef.current = false // Reset stopping flag
+			
+			// Handle specific error types with better recovery
+			if (event.error === 'not-allowed') {
+				console.log('🚫 Microphone permission denied')
+				return
+			} else if (event.error === 'no-speech') {
+				console.log('🔇 No speech detected - restarting')
+				// Restart immediately for no-speech errors
+				setTimeout(() => {
+					if (canStartRecognition()) {
+						startRecognition()
+					}
+				}, 1000)
+			} else if (event.error === 'audio-capture') {
+				console.log('🎵 Audio capture error - restarting after delay')
+				// Restart after delay for audio capture errors
+				setTimeout(() => {
+					if (canStartRecognition()) {
+						startRecognition()
+					}
+				}, 3000)
+			} else {
+				console.log('🔄 Other error - restarting after longer delay')
+				// Restart on other errors if we should still be listening, but with much longer delay
+				if (shouldListenRef.current && !isSpeaking && !isProcessing) {
+					setTimeout(() => {
+						if (canStartRecognition()) {
+							startRecognition()
+						}
+					}, 8000) // Much longer delay for error recovery to prevent loops
+				}
 			}
 		}
 		
@@ -1377,7 +1436,7 @@ export default function Home() {
 		return !isListening && !isStartingRef.current && shouldListenRef.current
 	}
 
-	// Simplified recognition start function
+	// Enhanced recognition start function with better stability
 	const startRecognition = () => {
 		const recognition = recognitionRef.current
 		if (!recognition || !shouldListenRef.current) return
@@ -1397,25 +1456,46 @@ export default function Home() {
 		lastRestartAttemptRef.current = Date.now() // Record restart attempt timestamp
 		
 		try {
+			// Reset any existing state before starting
+			if (recognition.state === 'recording') {
+				try {
+					recognition.stop()
+				} catch (e) {
+					console.log('Cleanup stop error:', e)
+				}
+			}
+			
 			recognition.start()
+			console.log('🎤 Recognition started successfully')
 		} catch (e) {
 			console.error('Recognition start error:', e)
 			isStartingRef.current = false
 			
-			// Handle specific error types
+			// Handle specific error types with better recovery
 			if (e instanceof Error) {
 				if (e.name === 'InvalidStateError') {
-					// Force reset the recognition state and mark as listening to prevent loops
+					console.log('🔄 Invalid state error - resetting recognition')
+					// Force reset the recognition state
 					try {
 						recognition.stop()
-						setIsListening(true) // Assume it's actually running
+						// Reset flags to allow retry
+						setIsListening(false)
+						isStartingRef.current = false
+						isStoppingRef.current = false
 					} catch (stopError) {
 						console.log('Recognition stop error:', stopError)
 					}
-					// Don't retry immediately - let the onend/onerror handlers deal with it
+					// Retry after a delay
+					setTimeout(() => {
+						if (canStartRecognition() && !isAudioPlaying) {
+							startRecognition()
+						}
+					}, 2000)
 				} else if (e.name === 'NotAllowedError') {
+					console.log('🚫 Permission denied - not retrying')
 					// Don't retry for permission errors
 				} else {
+					console.log('🔄 Other error - retrying after delay')
 					// Retry other errors with longer delay
 					setTimeout(() => {
 						if (canStartRecognition() && !isAudioPlaying) {
@@ -1424,6 +1504,7 @@ export default function Home() {
 					}, 3000)
 				}
 			} else {
+				console.log('🔄 Unknown error - retrying after delay')
 				setTimeout(() => {
 					if (canStartRecognition() && !isAudioPlaying) {
 						startRecognition()
@@ -1603,29 +1684,29 @@ export default function Home() {
 		}
 	}, [])
 
-	// Simplified effect to manage when recognition should be active
+	// Enhanced effect to manage when recognition should be active with better stability
 	useEffect(() => {
-		shouldListenRef.current = !isProcessing && !isSpeaking
-		
-
+		shouldListenRef.current = !isProcessing && !isSpeaking;
 		
 		if (shouldListenRef.current) {
 			// Start recognition if it's not already running and not in the middle of starting/stopping
 			if (!isListening && recognitionRef.current && !isStartingRef.current && !isStoppingRef.current) {
-
+				console.log('🔄 Recognition management: starting recognition');
+				
 				setTimeout(() => {
 					if (canStartRecognition()) {
-						startRecognition()
+						startRecognition();
 					}
-				}, 1000)
+				}, 1200); // Slightly increased delay for better stability
 			}
 		} else {
 			// Stop recognition if it's running and not in the middle of stopping
 			if (isListening && recognitionRef.current && !isStoppingRef.current) {
-				stopRecognition()
+				console.log('🔄 Recognition management: stopping recognition');
+				stopRecognition();
 			}
 		}
-	}, [isProcessing, isSpeaking, isListening])
+	}, [isProcessing, isSpeaking, isListening]);
 
 	useEffect(() => {
 		const animate = () => { setMouthAnimation(prev => (prev + 0.15) % (Math.PI * 2)); animationFrameRef.current = requestAnimationFrame(animate) }
@@ -1657,53 +1738,68 @@ export default function Home() {
 		return () => { if (timer) clearInterval(timer) }
 	}, [])
 
-	// Speech synthesis monitor - cleans up stuck speech states
+	// Enhanced speech synthesis monitor - cleans up stuck speech states with better stability
 	useEffect(() => {
 		const speechMonitor = setInterval(() => {
 			if (typeof window !== 'undefined' && window.speechSynthesis) {
-				// If we think we're speaking but synthesis says we're not, clean up
-				if (isSpeaking && !window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
-
-					setIsSpeaking(false)
-					setAiResponse('')
-					if (!isProcessing && !isStartingRef.current) {
-						setTimeout(() => {
-							if (canStartRecognition()) {
-								startRecognition()
-							}
-						}, 2000)
+				try {
+					// If we think we're speaking but synthesis says we're not, clean up
+					if (isSpeaking && !window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+						console.log('🔊 Speech synthesis monitor: cleaning up stuck speaking state');
+						setIsSpeaking(false);
+						setAiResponse('');
+						
+						// Restart recognition with better timing
+						if (!isProcessing && !isStartingRef.current) {
+							setTimeout(() => {
+								if (canStartRecognition()) {
+									console.log('🔄 Restarting recognition after speech cleanup');
+									startRecognition();
+								}
+							}, 1500); // Reduced delay for better responsiveness
+						}
 					}
+				} catch (error) {
+					console.error('🔊 Speech synthesis monitor error:', error);
+					// Don't crash the monitor, just log the error
 				}
 			}
-		}, 2000) // Check every 2 seconds instead of 1 to reduce conflicts
+		}, 1500); // Check every 1.5 seconds for better responsiveness
 
-		return () => clearInterval(speechMonitor)
-	}, [isSpeaking, isProcessing])
+		return () => clearInterval(speechMonitor);
+	}, [isSpeaking, isProcessing]);
 
-	// Voice recognition health check - ensures it stays active
+	// Enhanced voice recognition health check - ensures it stays active with better stability
 	useEffect(() => {
 		const healthCheck = setInterval(() => {
-			// Only restart if we should be listening, recognition isn't active, and we're not in the middle of starting/stopping
-			if (shouldListenRef.current && 
-				!isListening && 
-				recognitionRef.current && 
-				!isSpeaking && 
-				!isProcessing && 
-				!isStartingRef.current && 
-				!isStoppingRef.current) {
-				
-
-				// Use a much longer delay to avoid conflicts with other restart attempts
-				setTimeout(() => {
-					if (canStartRecognition()) {
-						startRecognition()
-					}
-				}, 3000)
+			try {
+				// Only restart if we should be listening, recognition isn't active, and we're not in the middle of starting/stopping
+				if (shouldListenRef.current && 
+					!isListening && 
+					recognitionRef.current && 
+					!isSpeaking && 
+					!isProcessing && 
+					!isStartingRef.current && 
+					!isStoppingRef.current) {
+					
+					console.log('🔍 Recognition health check: restarting inactive recognition');
+					
+					// Use a longer delay to avoid conflicts with other restart attempts
+					setTimeout(() => {
+						if (canStartRecognition()) {
+							console.log('🔄 Health check restarting recognition');
+							startRecognition();
+						}
+					}, 4000); // Increased delay for better stability
+				}
+			} catch (error) {
+				console.error('🔍 Recognition health check error:', error);
+				// Don't crash the health check, just log the error
 			}
-		}, 5000) // Check every 5 seconds instead of 3 to reduce conflicts
+		}, 5000); // Check every 5 seconds for better stability
 
-		return () => clearInterval(healthCheck)
-	}, [isListening, isSpeaking, isProcessing])
+		return () => clearInterval(healthCheck);
+	}, [shouldListenRef.current, isListening, isSpeaking, isProcessing]);
 
 	const handleGameEnd = (result: 'user' | 'ai' | 'draw') => {
 		// Close the game modal
@@ -2481,6 +2577,55 @@ export default function Home() {
 		}
 		return (<line x1="580" y1="500" x2="620" y2="500" stroke="#08AFC0" strokeWidth="6" strokeLinecap="round" />)
 	}
+
+	// System recovery mechanism - handles unexpected crashes and restores functionality
+	useEffect(() => {
+		const systemRecovery = setInterval(() => {
+			try {
+				// Check if recognition is in a bad state
+				if (recognitionRef.current && 
+					!isListening && 
+					!isSpeaking && 
+					!isProcessing && 
+					!isStartingRef.current && 
+					!isStoppingRef.current &&
+					shouldListenRef.current) {
+					
+					// Check if recognition has been inactive for too long (potential crash)
+					const timeSinceLastRestart = Date.now() - lastRestartAttemptRef.current;
+					if (timeSinceLastRestart > 30000) { // 30 seconds
+						console.log('🔄 System recovery: recognition appears crashed, attempting recovery');
+						
+						// Reset all flags and try to restart
+						isStartingRef.current = false;
+						isStoppingRef.current = false;
+						lastRestartAttemptRef.current = Date.now();
+						
+						setTimeout(() => {
+							if (canStartRecognition()) {
+								console.log('🔄 System recovery: restarting recognition');
+								startRecognition();
+							}
+						}, 2000);
+					}
+				}
+				
+				// Check if audio context is in a bad state
+				if (fallbackAudioContext && fallbackAudioContext.state === 'suspended') {
+					console.log('🔊 System recovery: audio context suspended, attempting resume');
+					fallbackAudioContext.resume().catch(e => {
+						console.error('🔊 System recovery: failed to resume audio context:', e);
+					});
+				}
+				
+			} catch (error) {
+				console.error('🔄 System recovery error:', error);
+				// Don't crash the recovery system
+			}
+		}, 10000); // Check every 10 seconds
+
+		return () => clearInterval(systemRecovery);
+	}, [isListening, isSpeaking, isProcessing, fallbackAudioContext]);
 
 	return (
 		<>
