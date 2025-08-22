@@ -23,13 +23,14 @@ export default function AudioPlayer({ onClose, onAudioStateChange }: AudioPlayer
   const [isLoading, setIsLoading] = useState(false);
   const [currentlyPlaying, setCurrentlyPlaying] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
-  const [autoPlayNew, setAutoPlayNew] = useState(true);
+  const [autoPlayNew, setAutoPlayNew] = useState(false); // Changed from true to false for Pi compatibility
   const [newFileNotification, setNewFileNotification] = useState<string | null>(null);
   // State to keep track of played audio files
   const [playedAudioFiles, setPlayedAudioFiles] = useState<string[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const playedAudioFilesRef = useRef<string[]>([]);
+  const hasUserInteracted = useRef(false); // Ref to track user interaction
 
   console.log('🎵 AudioPlayer component rendering...');
 
@@ -184,7 +185,17 @@ export default function AudioPlayer({ onClose, onAudioStateChange }: AudioPlayer
         audio.src = audioFile.audioData;
         audio.oncanplay = () => {
           console.log('🎵 Audio can play, starting...');
-          audio.play().catch(e => console.error('Play error:', e));
+          // Only autoplay if explicitly enabled and user has interacted
+          if (autoPlayNew && hasUserInteracted.current) {
+            audio.play().catch(e => {
+              console.error('Play error:', e);
+              // If autoplay fails, set autoplay to false and show message
+              if (e.name === 'NotAllowedError') {
+                setAutoPlayNew(false);
+                addDebugMessage('Autoplay blocked - click to play manually');
+              }
+            });
+          }
         };
         audio.onerror = (e) => {
           console.error('Audio error:', e);
@@ -277,9 +288,9 @@ export default function AudioPlayer({ onClose, onAudioStateChange }: AudioPlayer
 
   // Load on mount
   useEffect(() => {
-    console.log('🎵 AudioPlayer mounted, preparing monitoring...');
-    addDebugMessage('Component mounted - preparing continuous monitoring');
-
+    console.log('🎵 AudioPlayer mounting...');
+    addDebugMessage('AudioPlayer mounted');
+    
     // Load played audio files from localStorage BEFORE starting listener
     const storedPlayedFiles = localStorage.getItem('playedAudioFiles');
     if (storedPlayedFiles) {
@@ -293,18 +304,31 @@ export default function AudioPlayer({ onClose, onAudioStateChange }: AudioPlayer
         addDebugMessage('Error loading played files from localStorage');
       }
     }
-
+    
+    // Track user interactions to enable autoplay
+    const handleUserInteraction = () => {
+      hasUserInteracted.current = true;
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+    
+    document.addEventListener('click', handleUserInteraction);
+    document.addEventListener('touchstart', handleUserInteraction);
+    document.addEventListener('keydown', handleUserInteraction);
+    
     // Now start the real-time listener
     setupRealTimeListener();
     
-    // Cleanup function
     return () => {
-      console.log('🎵 AudioPlayer unmounting, cleaning up...');
-      addDebugMessage('Component unmounting, cleaning up listener');
+      console.log('🎵 AudioPlayer unmounting...');
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
         unsubscribeRef.current = null;
       }
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
     };
   }, []); // Empty dependency array since we only want this to run once on mount
 

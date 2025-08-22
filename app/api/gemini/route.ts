@@ -9,9 +9,9 @@ export async function POST(request: NextRequest) {
 			return NextResponse.json({ error: 'Message is required' }, { status: 400 })
 		}
 
-		const API_KEY = 'AIzaSyD7KOEgF6J2HATKS2JEgVn_3Cmd1YsJqAg'
+		const API_KEY = 'AIzaSyAVDE3Dfq9iDUKLuiKTabCAkA0nb-QbCWY'
 		// Build instruction context from local file
-		let instructions = 'You are a friendly AI robot assistant named OneRobo who looks after little children who were left at home by their working parents. Keep responses under 100 words.'
+		let instructions = 'You are a friendly AI robot assistant named Antara who looks after little children,elderly people and teens who were left at home by their working parents. Keep responses under 30 words.'
 		try {
 			const instructionsPath = join(process.cwd(), 'chatbot-instructions.txt')
 			instructions = readFileSync(instructionsPath, 'utf-8').trim()
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 				ageSpecificInstructions = ' You are talking to a TEEN-ADULT (ages 13-64). Use clear, friendly language. Be helpful and informative. You can discuss more complex topics, provide useful information, and engage in meaningful conversations. Be respectful and professional while maintaining a warm personality.'
 				break
 			case 'OLD':
-				ageSpecificInstructions = ' You are talking to an OLD person (ages 65+). Use clear, respectful language. Speak a bit slower and be very patient. Show respect for their life experience. Be helpful with practical matters and show genuine care and concern. Use a warm, comforting tone.'
+				ageSpecificInstructions = ' You are talking to an OLD person (ages 65+). Use clear, respectful language. Speak a bit slower and be very patient. Show respect for their life experience. Be helpful with practical matters and show genuine care and concern. Use a warm, comforting tone. Also u should listen more and let them speak more'
 				break
 			default:
 				ageSpecificInstructions = ' You are talking to a CHILD (ages 3-12). Use simple, friendly language. Be very patient and encouraging. Use lots of emojis and fun expressions. Keep explanations very simple and engaging. Focus on games, fun activities, and making them feel safe and happy.'

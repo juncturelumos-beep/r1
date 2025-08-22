@@ -760,6 +760,7 @@ function Sudoku({ onClose }: { onClose: () => void }) {
 export default function Home() {
 	const [isSpeaking, setIsSpeaking] = useState(false)
 	const [stars, setStars] = useState<{cx: number, cy: number, r: number, opacity: number}[]>([]);
+	const [hasUserInteracted, setHasUserInteracted] = useState(false) // Track user interaction for Pi compatibility
 	const [selectedAgeGroup, setSelectedAgeGroup] = useState<'CHILD' | 'TEEN-ADULT' | 'OLD' | null>(() => {
 		// Load age group from localStorage on component mount
 		if (typeof window !== 'undefined') {
@@ -824,15 +825,50 @@ export default function Home() {
 		}
 	}, [fallbackAudioContext]);
 
-	// Create audio context on user interaction (required by browsers)
+	// Handle user interactions to enable audio (required for Raspberry Pi)
+	useEffect(() => {
+		const handleUserInteraction = () => {
+			if (!hasUserInteracted) {
+				console.log('👆 User interaction detected, enabling audio capabilities');
+				console.log('🔊 This fixes Raspberry Pi autoplay restrictions');
+				setHasUserInteracted(true);
+				
+				// Remove event listeners after first interaction
+				document.removeEventListener('click', handleUserInteraction);
+				document.removeEventListener('touchstart', handleUserInteraction);
+				document.removeEventListener('keydown', handleUserInteraction);
+			}
+		};
+		
+		// Add event listeners for user interaction
+		document.addEventListener('click', handleUserInteraction);
+		document.addEventListener('touchstart', handleUserInteraction);
+		document.addEventListener('keydown', handleUserInteraction);
+		
+		return () => {
+			document.removeEventListener('click', handleUserInteraction);
+			document.removeEventListener('touchstart', handleUserInteraction);
+			document.removeEventListener('keydown', handleUserInteraction);
+		};
+	}, [hasUserInteracted]);
+
+	// Create audio context on user interaction (required by browsers, especially Raspberry Pi)
 	const createAudioContextOnInteraction = () => {
-		if (fallbackAudioContext) return; // Already created
+		if (fallbackAudioContext || !hasUserInteracted) return; // Wait for user interaction
 		
 		try {
 			const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
 			if (AudioContextClass) {
 				const audioContext = new AudioContextClass();
 				console.log('🔊 Audio context created on user interaction');
+				
+				// For Raspberry Pi, we need to handle the suspended state more carefully
+				if (audioContext.state === 'suspended') {
+					console.log('🔊 Audio context suspended, will resume on next user interaction');
+					// Don't set it yet, wait for actual user interaction
+					return;
+				}
+				
 				setFallbackAudioContext(audioContext);
 			} else {
 				console.log('❌ AudioContext not supported in this browser');
@@ -840,6 +876,52 @@ export default function Home() {
 		} catch (error) {
 			console.error('❌ Failed to create audio context on user interaction:', error);
 		}
+	};
+
+	// Enhanced audio context creation that handles Raspberry Pi restrictions
+	const createAndResumeAudioContext = async () => {
+		// Require user interaction first
+		if (!hasUserInteracted) {
+			console.log('🔊 Waiting for user interaction before creating audio context');
+			return false;
+		}
+		
+		if (fallbackAudioContext) {
+			// If we already have one, just try to resume it
+			if (fallbackAudioContext.state === 'suspended') {
+				try {
+					await fallbackAudioContext.resume();
+					console.log('🔊 Existing audio context resumed successfully');
+					return true;
+				} catch (error) {
+					console.error('❌ Failed to resume existing audio context:', error);
+					return false;
+				}
+			}
+			return true;
+		}
+		
+		// Create new audio context
+		try {
+			const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+			if (AudioContextClass) {
+				const audioContext = new AudioContextClass();
+				console.log('🔊 New audio context created');
+				
+				// Try to resume immediately
+				if (audioContext.state === 'suspended') {
+					await audioContext.resume();
+					console.log('🔊 New audio context resumed successfully');
+				}
+				
+				setFallbackAudioContext(audioContext);
+				return true;
+			}
+		} catch (error) {
+			console.error('❌ Failed to create/resume audio context:', error);
+		}
+		
+		return false;
 	};
 
 	// Test Web Speech API compatibility on mount
@@ -894,12 +976,19 @@ export default function Home() {
 	};
 
 	// Fallback audio using Web Audio API (works on Raspberry Pi)
-	const playFallbackAudio = (text: string) => {
+	const playFallbackAudio = async (text: string) => {
 		console.log('🔊 Playing fallback audio for text:', text);
 		
 		if (!fallbackAudioContext) {
 			console.log('🔊 Creating audio context on demand...');
-			createAudioContextOnInteraction();
+			const success = await createAndResumeAudioContext();
+			
+			if (!success) {
+				console.log('❌ Audio context creation failed, falling back to text-only');
+				setAiResponse(text);
+				setTimeout(() => setAiResponse(''), 4000);
+				return;
+			}
 			
 			// Wait a bit for audio context to be created, then try again
 			setTimeout(() => {
@@ -919,15 +1008,16 @@ export default function Home() {
 			// Ensure audio context is running
 			if (fallbackAudioContext.state === 'suspended') {
 				console.log('🔊 Audio context suspended, attempting to resume...');
-				fallbackAudioContext.resume().then(() => {
-					console.log('🔊 Audio context resumed, playing audio...');
+				try {
+					await fallbackAudioContext.resume();
+					console.log('🔊 Audio context resumed successfully');
 					playFallbackAudioInternal(text);
-				}).catch(error => {
+				} catch (error) {
 					console.error('❌ Failed to resume audio context:', error);
 					// Fall back to text-only mode
 					setAiResponse(text);
 					setTimeout(() => setAiResponse(''), 4000);
-				});
+				}
 				return;
 			}
 			
@@ -2448,6 +2538,24 @@ export default function Home() {
 			)}
 			{selectedAgeGroup && (
 				<>
+					{!hasUserInteracted && (
+						<div className="modal-backdrop">
+							<div className="permission-modal">
+								<h2>🎵 Audio Setup</h2>
+								<p>For the best experience on all devices (including Raspberry Pi), please interact with the page to enable audio capabilities.</p>
+								<p style={{ fontSize: '14px', opacity: 0.8, marginTop: '10px' }}>
+									💡 <strong>Tip:</strong> Click anywhere on the page or press any key to continue
+								</p>
+								<button 
+									className="btn" 
+									onClick={() => setHasUserInteracted(true)}
+									style={{ fontSize: '16px', padding: '12px 20px', marginTop: '20px' }}
+								>
+									✅ I Understand
+								</button>
+							</div>
+						</div>
+					)}
 					<div className="header-actions" />
 					<main className="container">
 						<div className="interface">
@@ -2544,6 +2652,26 @@ export default function Home() {
 									zIndex: 1000
 								}}>
 									🔊 Fallback Audio Mode
+								</div>
+							)}
+
+							{/* User Interaction Status */}
+							{!hasUserInteracted && (
+								<div className="user-interaction-status" style={{ 
+									position: 'absolute', 
+									top: '100px', 
+									right: '20px',
+									padding: '8px 16px',
+									backgroundColor: '#EF4444',
+									color: 'white',
+									borderRadius: '20px',
+									fontSize: '12px',
+									fontWeight: 'bold',
+									boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+									zIndex: '1000',
+									animation: 'userInteractionPulse 2s infinite'
+								}}>
+									👆 Click to Enable Audio
 								</div>
 							)}
 

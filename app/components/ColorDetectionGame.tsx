@@ -435,9 +435,29 @@ export default function ColorDetectionGame({ onClose }: ColorDetectionGameProps)
 
 						<div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 16 }}>
 							<div style={{ position: 'relative', border: '3px solid #08AFC0', borderRadius: '12px', overflow: 'hidden', width: '100%', maxWidth: '640px' }}>
-								<video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: 'auto', display: 'block' }} />
+								<video ref={videoRef} playsInline muted style={{ width: '100%', height: 'auto', display: 'block' }} />
 								<canvas ref={canvasRef} style={{ display: 'none' }} />
 								
+								{!gameStarted && (
+									<div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', backgroundColor: 'rgba(0, 0, 0, 0.7)', padding: '20px', borderRadius: '10px' }}>
+										<button 
+											className="btn" 
+											onClick={() => {
+												if (videoRef.current) {
+													videoRef.current.play().catch(e => {
+														console.error('Video play error:', e);
+														setCameraError('Video playback blocked. Please interact with the page first.');
+													});
+												}
+											}}
+											style={{ marginBottom: '10px' }}
+										>
+											▶️ Start Camera
+										</button>
+										<p style={{ color: 'white', margin: 0, fontSize: '14px' }}>Click to enable camera</p>
+									</div>
+								)}
+
 								<div 
 									className={`detection-circle ${gameActive ? 'active' : ''}`}
 									style={{ 
