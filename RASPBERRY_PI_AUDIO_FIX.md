@@ -118,23 +118,69 @@ const playFallbackAudio = (text: string) => {
 6. **Try speaking to the AI** - you should hear voice-like audio patterns!
 7. **Text responses will also appear** for clarity
 
+### Audio Test Page
+
+If you're still having audio issues, visit `/audio-test` on your site for a comprehensive audio diagnostic tool:
+
+- **Audio Context Status**: Shows if audio context is created and running
+- **Test Controls**: Step-by-step audio testing
+- **Test Results**: Real-time logging of audio operations
+- **Troubleshooting Guide**: Step-by-step solutions
+
 ## Troubleshooting
 
 ### No Audio Over VNC
-- Check RealVNC Viewer audio settings
-- Ensure "Play audio from remote computer" is enabled
-- Check browser console for VNC detection messages
-- Try refreshing the page
+
+1. **Check RealVNC Viewer audio settings**:
+   - Open RealVNC Viewer
+   - Go to Settings → Audio
+   - Enable "Play audio from remote computer"
+   - Restart VNC connection
+
+2. **Browser audio permissions**:
+   - Check if audio is muted in browser
+   - Look for speaker icon in address bar
+   - Grant audio permissions if prompted
+
+3. **Audio context creation**:
+   - Click any button on the page (this creates audio context)
+   - Check console for "Audio context created on user interaction"
+   - Look for "Fallback Audio Mode" indicator
 
 ### Still No Audio
-- The system will automatically fall back to text-only mode
-- All AI responses will be displayed as text
-- Games and other features will still work normally
+
+1. **Use the Audio Test Page** (`/audio-test`):
+   - Click "Create Audio Context"
+   - Click "Resume Audio Context" if suspended
+   - Click "Play Test Tone" - should hear 440Hz tone
+   - Click "Play Enhanced Audio" - should hear voice-like patterns
+
+2. **Check console for errors**:
+   - Look for audio context creation messages
+   - Check for VNC detection messages
+   - Look for fallback audio activation
+
+3. **Fallback to text-only mode**:
+   - The system will automatically fall back to text display
+   - All AI responses will be displayed as text
+   - Games and other features will still work normally
 
 ### Audio Quality Issues
-- Enhanced fallback audio uses sophisticated voice-like patterns
-- Audio is optimized for VNC transmission
-- Consider using external speakers on the Pi for better audio
+
+- **Enhanced fallback audio** uses sophisticated voice-like patterns
+- **Audio is optimized** for VNC transmission
+- **Consider external speakers** on the Pi for better audio
+- **Check VNC audio quality** settings in RealVNC Viewer
+
+### Common Issues and Solutions
+
+| Issue | Solution |
+|-------|----------|
+| "Audio context suspended" | Click any button on the page |
+| "Fallback Audio Mode" but no sound | Check RealVNC audio settings |
+| React Error #418 | Refresh page and try again |
+| SpeechRecognition errors | Normal, fallback system handles this |
+| No audio context | Click buttons to create on user interaction |
 
 ## Future Improvements
 

@@ -819,14 +819,28 @@ export default function Home() {
 	// Initialize fallback audio context for Raspberry Pi compatibility
 	useEffect(() => {
 		if (typeof window !== 'undefined' && !fallbackAudioContext) {
-			try {
-				const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-				setFallbackAudioContext(audioContext);
-			} catch (error) {
-				console.log('Fallback audio context creation failed:', error);
-			}
+			// Don't create audio context immediately - wait for user interaction
+			console.log('🔊 Audio context will be created on first user interaction');
 		}
 	}, [fallbackAudioContext]);
+
+	// Create audio context on user interaction (required by browsers)
+	const createAudioContextOnInteraction = () => {
+		if (fallbackAudioContext) return; // Already created
+		
+		try {
+			const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+			if (AudioContextClass) {
+				const audioContext = new AudioContextClass();
+				console.log('🔊 Audio context created on user interaction');
+				setFallbackAudioContext(audioContext);
+			} else {
+				console.log('❌ AudioContext not supported in this browser');
+			}
+		} catch (error) {
+			console.error('❌ Failed to create audio context on user interaction:', error);
+		}
+	};
 
 	// Test Web Speech API compatibility on mount
 	useEffect(() => {
@@ -884,36 +898,73 @@ export default function Home() {
 		console.log('🔊 Playing fallback audio for text:', text);
 		
 		if (!fallbackAudioContext) {
-			console.log('❌ Fallback audio context not available');
+			console.log('🔊 Creating audio context on demand...');
+			createAudioContextOnInteraction();
+			
+			// Wait a bit for audio context to be created, then try again
+			setTimeout(() => {
+				if (fallbackAudioContext) {
+					console.log('🔊 Audio context created, retrying audio playback...');
+					playFallbackAudio(text);
+				} else {
+					console.log('❌ Audio context creation failed, falling back to text-only');
+					setAiResponse(text);
+					setTimeout(() => setAiResponse(''), 4000);
+				}
+			}, 100);
 			return;
 		}
 
 		try {
-			// Resume audio context if suspended (required for user interaction)
+			// Ensure audio context is running
 			if (fallbackAudioContext.state === 'suspended') {
-				console.log('🔊 Resuming suspended audio context...');
-				fallbackAudioContext.resume();
+				console.log('🔊 Audio context suspended, attempting to resume...');
+				fallbackAudioContext.resume().then(() => {
+					console.log('🔊 Audio context resumed, playing audio...');
+					playFallbackAudioInternal(text);
+				}).catch(error => {
+					console.error('❌ Failed to resume audio context:', error);
+					// Fall back to text-only mode
+					setAiResponse(text);
+					setTimeout(() => setAiResponse(''), 4000);
+				});
+				return;
 			}
 			
-			// Calculate speech duration based on text length (similar to natural speech)
+			// Audio context is running, play audio
+			playFallbackAudioInternal(text);
+			
+		} catch (error) {
+			console.error('❌ Enhanced fallback audio failed:', error);
+			// Fallback to simple beep if enhanced audio fails
+			playSimpleFallbackAudio(text);
+		}
+	};
+
+	// Internal function to actually play the audio
+	const playFallbackAudioInternal = (text: string) => {
+		try {
+			// Calculate speech duration based on text length (natural speech rate)
 			const wordsPerMinute = 150; // Natural speech rate
 			const wordCount = text.split(' ').length;
-			const speechDuration = (wordCount / wordsPerMinute) * 60; // Duration in seconds
+			const speechDuration = Math.max(1, (wordCount / wordsPerMinute) * 60); // Minimum 1 second
+			
+			console.log(`🔊 Playing ${speechDuration}s of audio for ${wordCount} words`);
 			
 			// Create more sophisticated voice-like audio
-			const oscillator = fallbackAudioContext.createOscillator();
-			const gainNode = fallbackAudioContext.createGain();
-			const filterNode = fallbackAudioContext.createBiquadFilter();
+			const oscillator = fallbackAudioContext!.createOscillator();
+			const gainNode = fallbackAudioContext!.createGain();
+			const filterNode = fallbackAudioContext!.createBiquadFilter();
 			
 			// Connect audio nodes
 			oscillator.connect(filterNode);
 			filterNode.connect(gainNode);
-			gainNode.connect(fallbackAudioContext.destination);
+			gainNode.connect(fallbackAudioContext!.destination);
 			
 			// Voice-like characteristics
 			filterNode.type = 'lowpass';
-			filterNode.frequency.setValueAtTime(800, fallbackAudioContext.currentTime);
-			filterNode.Q.setValueAtTime(1, fallbackAudioContext.currentTime);
+			filterNode.frequency.setValueAtTime(800, fallbackAudioContext!.currentTime);
+			filterNode.Q.setValueAtTime(1, fallbackAudioContext!.currentTime);
 			
 			// Dynamic frequency changes to simulate speech patterns
 			const baseFreq = 220; // A3 note - pleasant voice-like frequency
@@ -923,7 +974,7 @@ export default function Home() {
 			const timeStep = speechDuration / 8; // Divide speech into 8 segments
 			
 			for (let i = 0; i < 8; i++) {
-				const time = fallbackAudioContext.currentTime + (i * timeStep);
+				const time = fallbackAudioContext!.currentTime + (i * timeStep);
 				const freq = baseFreq * Math.pow(2, freqVariations[i] / 12); // Musical scale
 				
 				// Set frequency for this segment
@@ -946,8 +997,8 @@ export default function Home() {
 			}
 			
 			// Start and stop the oscillator
-			oscillator.start(fallbackAudioContext.currentTime);
-			oscillator.stop(fallbackAudioContext.currentTime + speechDuration);
+			oscillator.start(fallbackAudioContext!.currentTime);
+			oscillator.stop(fallbackAudioContext!.currentTime + speechDuration);
 			
 			console.log('🔊 Enhanced fallback audio playing successfully');
 			
@@ -956,7 +1007,7 @@ export default function Home() {
 			setTimeout(() => setAiResponse(''), Math.max(4000, speechDuration * 1000));
 			
 		} catch (error) {
-			console.error('❌ Enhanced fallback audio failed:', error);
+			console.error('❌ Enhanced fallback audio internal failed:', error);
 			// Fallback to simple beep if enhanced audio fails
 			playSimpleFallbackAudio(text);
 		}
@@ -991,6 +1042,8 @@ export default function Home() {
 	};
 
 	const requestSpeechPermission = () => {
+		// Create audio context on user interaction
+		createAudioContextOnInteraction();
 		setSpeechPermissionGranted(true)
 	}
 
@@ -2359,6 +2412,7 @@ export default function Home() {
 							<button 
 								className="btn" 
 								onClick={() => {
+									createAudioContextOnInteraction();
 									setSelectedAgeGroup('CHILD')
 									saveAgeGroup('CHILD')
 								}}
@@ -2369,6 +2423,7 @@ export default function Home() {
 							<button 
 								className="btn" 
 								onClick={() => {
+									createAudioContextOnInteraction();
 									setSelectedAgeGroup('TEEN-ADULT')
 									saveAgeGroup('TEEN-ADULT')
 								}}
@@ -2379,6 +2434,7 @@ export default function Home() {
 							<button 
 								className="btn" 
 								onClick={() => {
+									createAudioContextOnInteraction();
 									setSelectedAgeGroup('OLD')
 									saveAgeGroup('OLD')
 								}}
