@@ -813,6 +813,182 @@ export default function Home() {
 	const [speechPermissionGranted, setSpeechPermissionGranted] = useState(false)
 	const [voicesLoaded, setVoicesLoaded] = useState(false)
 	const [isAudioPlaying, setIsAudioPlaying] = useState(false)
+	const [useFallbackAudio, setUseFallbackAudio] = useState(false)
+	const [fallbackAudioContext, setFallbackAudioContext] = useState<AudioContext | null>(null)
+
+	// Initialize fallback audio context for Raspberry Pi compatibility
+	useEffect(() => {
+		if (typeof window !== 'undefined' && !fallbackAudioContext) {
+			try {
+				const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+				setFallbackAudioContext(audioContext);
+			} catch (error) {
+				console.log('Fallback audio context creation failed:', error);
+			}
+		}
+	}, [fallbackAudioContext]);
+
+	// Test Web Speech API compatibility on mount
+	useEffect(() => {
+		// Test after a short delay to ensure everything is loaded
+		const timer = setTimeout(() => {
+			testSpeechAPI();
+		}, 1000);
+		
+		return () => clearTimeout(timer);
+	}, []);
+
+	// Test Web Speech API compatibility
+	const testSpeechAPI = () => {
+		console.log('🔊 Testing Web Speech API compatibility...');
+		console.log('🔊 User Agent:', navigator.userAgent);
+		console.log('🔊 Platform:', navigator.platform);
+		
+		// Check for VNC-specific indicators
+		const isVNC = navigator.userAgent.includes('VNC') || 
+					  navigator.userAgent.includes('RealVNC') ||
+					  navigator.userAgent.includes('TightVNC') ||
+					  navigator.userAgent.includes('UltraVNC');
+		
+		if (isVNC) {
+			console.log('🔊 VNC detected - likely to have audio issues, enabling fallback');
+			setUseFallbackAudio(true);
+			return;
+		}
+		
+		if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+			try {
+				const testUtter = new SpeechSynthesisUtterance('test');
+				testUtter.onerror = (event) => {
+					console.log('❌ Web Speech API failed:', event.error);
+					console.log('🔊 Enabling fallback audio for Raspberry Pi compatibility');
+					setUseFallbackAudio(true);
+				};
+				testUtter.onend = () => {
+					console.log('✅ Web Speech API working');
+					setUseFallbackAudio(false);
+				};
+				window.speechSynthesis.speak(testUtter);
+			} catch (error) {
+				console.log('❌ Web Speech API test failed:', error);
+				setUseFallbackAudio(true);
+			}
+		} else {
+			console.log('❌ Web Speech API not available, using fallback audio');
+			setUseFallbackAudio(true);
+		}
+	};
+
+	// Fallback audio using Web Audio API (works on Raspberry Pi)
+	const playFallbackAudio = (text: string) => {
+		console.log('🔊 Playing fallback audio for text:', text);
+		
+		if (!fallbackAudioContext) {
+			console.log('❌ Fallback audio context not available');
+			return;
+		}
+
+		try {
+			// Resume audio context if suspended (required for user interaction)
+			if (fallbackAudioContext.state === 'suspended') {
+				console.log('🔊 Resuming suspended audio context...');
+				fallbackAudioContext.resume();
+			}
+			
+			// Calculate speech duration based on text length (similar to natural speech)
+			const wordsPerMinute = 150; // Natural speech rate
+			const wordCount = text.split(' ').length;
+			const speechDuration = (wordCount / wordsPerMinute) * 60; // Duration in seconds
+			
+			// Create more sophisticated voice-like audio
+			const oscillator = fallbackAudioContext.createOscillator();
+			const gainNode = fallbackAudioContext.createGain();
+			const filterNode = fallbackAudioContext.createBiquadFilter();
+			
+			// Connect audio nodes
+			oscillator.connect(filterNode);
+			filterNode.connect(gainNode);
+			gainNode.connect(fallbackAudioContext.destination);
+			
+			// Voice-like characteristics
+			filterNode.type = 'lowpass';
+			filterNode.frequency.setValueAtTime(800, fallbackAudioContext.currentTime);
+			filterNode.Q.setValueAtTime(1, fallbackAudioContext.currentTime);
+			
+			// Dynamic frequency changes to simulate speech patterns
+			const baseFreq = 220; // A3 note - pleasant voice-like frequency
+			const freqVariations = [0, 2, -2, 4, -4, 2, 0, -2]; // Musical intervals
+			
+			// Create speech-like rhythm with varying pitch and volume
+			const timeStep = speechDuration / 8; // Divide speech into 8 segments
+			
+			for (let i = 0; i < 8; i++) {
+				const time = fallbackAudioContext.currentTime + (i * timeStep);
+				const freq = baseFreq * Math.pow(2, freqVariations[i] / 12); // Musical scale
+				
+				// Set frequency for this segment
+				oscillator.frequency.setValueAtTime(freq, time);
+				
+				// Set volume envelope (attack, sustain, release)
+				const segmentDuration = timeStep * 0.8; // 80% of segment for sound
+				const fadeIn = timeStep * 0.1; // 10% fade in
+				const fadeOut = timeStep * 0.1; // 10% fade out
+				
+				// Fade in
+				gainNode.gain.setValueAtTime(0, time);
+				gainNode.gain.linearRampToValueAtTime(0.4, time + fadeIn);
+				
+				// Sustain
+				gainNode.gain.setValueAtTime(0.4, time + fadeIn);
+				
+				// Fade out
+				gainNode.gain.linearRampToValueAtTime(0, time + segmentDuration);
+			}
+			
+			// Start and stop the oscillator
+			oscillator.start(fallbackAudioContext.currentTime);
+			oscillator.stop(fallbackAudioContext.currentTime + speechDuration);
+			
+			console.log('🔊 Enhanced fallback audio playing successfully');
+			
+			// Show text response since audio is limited
+			setAiResponse(text);
+			setTimeout(() => setAiResponse(''), Math.max(4000, speechDuration * 1000));
+			
+		} catch (error) {
+			console.error('❌ Enhanced fallback audio failed:', error);
+			// Fallback to simple beep if enhanced audio fails
+			playSimpleFallbackAudio(text);
+		}
+	};
+
+	// Simple fallback audio as backup
+	const playSimpleFallbackAudio = (text: string) => {
+		try {
+			const oscillator = fallbackAudioContext!.createOscillator();
+			const gainNode = fallbackAudioContext!.createGain();
+			
+			oscillator.connect(gainNode);
+			gainNode.connect(fallbackAudioContext!.destination);
+			
+			// Simple beep pattern
+			oscillator.frequency.setValueAtTime(440, fallbackAudioContext!.currentTime);
+			gainNode.gain.setValueAtTime(0.3, fallbackAudioContext!.currentTime);
+			
+			oscillator.start(fallbackAudioContext!.currentTime);
+			oscillator.stop(fallbackAudioContext!.currentTime + 0.5);
+			
+			// Show text response
+			setAiResponse(text);
+			setTimeout(() => setAiResponse(''), 4000);
+			
+		} catch (error) {
+			console.error('❌ Simple fallback audio also failed:', error);
+			// Last resort: just show text
+			setAiResponse(text);
+			setTimeout(() => setAiResponse(''), 4000);
+		}
+	};
 
 	const requestSpeechPermission = () => {
 		setSpeechPermissionGranted(true)
@@ -1990,7 +2166,32 @@ export default function Home() {
 		return preferredVoice
 	}
 
+	// Enhanced startSpeech with fallback
 	const startSpeech = (text: string, synth: SpeechSynthesis, pendingGame?: { game: 'tictactoe' | 'trivia' | 'sudoku' | 'color' | 'audio' | 'jitsi', aiMode: boolean } | null, emergencyTimer?: NodeJS.Timeout | null) => {
+		// If fallback audio is enabled or we're on Raspberry Pi, use fallback
+		if (useFallbackAudio || navigator.userAgent.includes('Raspberry') || navigator.userAgent.includes('Linux')) {
+			console.log('Using fallback audio for Raspberry Pi compatibility');
+			playFallbackAudio(text);
+			
+			// Handle game launch after fallback audio
+			if (pendingGame) {
+				setTimeout(() => {
+					launchGame(pendingGame.game, pendingGame.aiMode);
+					setPendingGameLaunch(null);
+				}, 2000);
+			}
+			
+			// Restart recognition
+			if (!isProcessing) {
+				setTimeout(() => {
+					if (canStartRecognition()) {
+						startRecognition();
+					}
+				}, 2000);
+			}
+			return;
+		}
+
 		try {
 			const utter = new SpeechSynthesisUtterance(text)
 			utter.rate = 1.0
@@ -2026,6 +2227,11 @@ export default function Home() {
 			utter.onerror = (event) => {
 				// Handle specific error types - note: TypeScript may not include all possible error types
 				const errorType = event.error as string
+				console.log('Speech synthesis error:', errorType);
+				
+				// Enable fallback audio for future attempts
+				setUseFallbackAudio(true);
+				
 				if (errorType === 'not-allowed' || errorType === 'authorization-failed') {
 					setSpeechPermissionGranted(false)
 					
@@ -2074,93 +2280,53 @@ export default function Home() {
 					return
 				}
 				
-				// For other errors, try a fallback approach
+				// For other errors, try fallback audio
 				if (emergencyTimer) clearTimeout(emergencyTimer)
 				setIsSpeaking(false)
-				setAiResponse(text)
-				setTimeout(() => {
-					setAiResponse('')
-					
-					// Launch pending game even if speech had errors
-					if (pendingGame) {
-						launchGame(pendingGame.game, pendingGame.aiMode)
-						setPendingGameLaunch(null)
-					}
-					
-					if (!isProcessing) {
-						setTimeout(() => {
-							if (canStartRecognition()) {
-								startRecognition()
-							}
-						}, 2000)
-					}
-				}, 3000)
-			}
-
-			// Try to resume synthesis in case it's paused
-			try { synth.resume() } catch (e) {}
-			
-			// Get the best available voice
-			const preferredVoice = getBestVoice(synth)
-			if (preferredVoice) {
-				utter.voice = preferredVoice
-			}
-
-			synth.speak(utter)
-
-			// Fallback timeout in case speech fails silently
-			const speechTimeout = setTimeout(() => {
-				if (synth.speaking) {
-					// Speech is still ongoing, let it continue
-				} else {
-					setIsSpeaking(false)
-					setAiResponse('')
-					
-					// Launch pending game even if speech failed silently
-					if (pendingGame) {
-						launchGame(pendingGame.game, pendingGame.aiMode)
-						setPendingGameLaunch(null)
-					}
-					
-					if (!isProcessing) {
-						setTimeout(() => {
-							if (canStartRecognition()) {
-								startRecognition()
-							}
-						}, 1000)
-					}
-				}
-			}, Math.max(text.length * 100, 3000)) // Timeout based on text length, min 3 seconds
-
-			// Clear timeout when speech ends
-			const originalOnEnd = utter.onend
-			utter.onend = (event) => {
-				clearTimeout(speechTimeout)
-				if (originalOnEnd) originalOnEnd.call(utter, event)
-			}
-
-		} catch (error) {
-			// Disable speech on critical errors
-			setSpeechPermissionGranted(false)
-			setIsSpeaking(false)
-			setAiResponse(text)
-			setTimeout(() => {
-				setAiResponse('')
+				playFallbackAudio(text);
 				
-				// Launch pending game even on critical speech errors
+				// Launch pending game after fallback audio
 				if (pendingGame) {
-					launchGame(pendingGame.game, pendingGame.aiMode)
-					setPendingGameLaunch(null)
+					setTimeout(() => {
+						launchGame(pendingGame.game, pendingGame.aiMode)
+						setPendingGameLaunch(null)
+					}, 2000)
 				}
 				
+				// Restart recognition
 				if (!isProcessing) {
 					setTimeout(() => {
 						if (canStartRecognition()) {
 							startRecognition()
 						}
-					}, 1000)
+					}, 2000)
 				}
-			}, 3000)
+			}
+
+			// Try to speak
+			synth.speak(utter)
+			
+		} catch (error) {
+			console.error('Speech synthesis failed:', error)
+			// Enable fallback audio
+			setUseFallbackAudio(true)
+			playFallbackAudio(text)
+			
+			// Handle game launch and recognition restart
+			if (pendingGame) {
+				setTimeout(() => {
+					launchGame(pendingGame.game, pendingGame.aiMode)
+					setPendingGameLaunch(null)
+				}, 2000)
+			}
+			
+			if (!isProcessing) {
+				setTimeout(() => {
+					if (canStartRecognition()) {
+						startRecognition()
+					}
+				}, 2000)
+			}
 		}
 	}
 
@@ -2303,6 +2469,25 @@ export default function Home() {
 									zIndex: 1000
 								}}>
 									Audio Playing - AI Paused
+								</div>
+							)}
+
+							{/* Fallback Audio Status */}
+							{useFallbackAudio && (
+								<div className="fallback-audio-status" style={{ 
+									position: 'absolute', 
+									top: '60px', 
+									right: '20px',
+									padding: '8px 16px',
+									backgroundColor: '#F59E0B',
+									color: 'white',
+									borderRadius: '20px',
+									fontSize: '12px',
+									fontWeight: 'bold',
+									boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+									zIndex: 1000
+								}}>
+									🔊 Fallback Audio Mode
 								</div>
 							)}
 
