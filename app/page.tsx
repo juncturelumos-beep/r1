@@ -1019,6 +1019,8 @@ export default function Home() {
 	// Enhanced fallback audio using Web Audio API (works on Raspberry Pi)
 	const playFallbackAudio = async (text: string) => {
 		console.log('🔊 Playing enhanced fallback audio for text:', text);
+		console.log('🔊 Fallback audio context state:', fallbackAudioContext?.state || 'null');
+		console.log('🔊 Has user interacted:', hasUserInteracted);
 		
 		if (!fallbackAudioContext) {
 			console.log('🔊 Creating audio context on demand...');
@@ -1075,6 +1077,16 @@ export default function Home() {
 	// Enhanced internal function to actually play the audio with better stability
 	const playFallbackAudioInternal = (text: string) => {
 		try {
+			console.log('🔊 Starting enhanced fallback audio internal...');
+			
+			if (!fallbackAudioContext) {
+				console.error('❌ No fallback audio context available');
+				// Last resort - just show text
+				setAiResponse(text);
+				setTimeout(() => setAiResponse(''), 4000);
+				return;
+			}
+			
 			// Calculate speech duration based on text length (natural speech rate)
 			const wordsPerMinute = 150; // Natural speech rate
 			const wordCount = text.split(' ').length;
@@ -1083,27 +1095,27 @@ export default function Home() {
 			console.log(`🔊 Playing ${speechDuration.toFixed(1)}s of enhanced audio for ${wordCount} words`);
 			
 			// Create simple, stable audio for Pi compatibility
-			const oscillator = fallbackAudioContext!.createOscillator();
-			const gainNode = fallbackAudioContext!.createGain();
+			const oscillator = fallbackAudioContext.createOscillator();
+			const gainNode = fallbackAudioContext.createGain();
 			
 			// Connect audio nodes (simplified for Pi stability)
 			oscillator.connect(gainNode);
-			gainNode.connect(fallbackAudioContext!.destination);
+			gainNode.connect(fallbackAudioContext.destination);
 			
 			// Use a simple, pleasant frequency that works well on Pi
 			const baseFreq = 220; // A3 note
-			oscillator.frequency.setValueAtTime(baseFreq, fallbackAudioContext!.currentTime);
+			oscillator.frequency.setValueAtTime(baseFreq, fallbackAudioContext.currentTime);
 			
 			// Simple volume envelope - start quiet, fade in, fade out
-			gainNode.gain.setValueAtTime(0, fallbackAudioContext!.currentTime);
-			gainNode.gain.linearRampToValueAtTime(0.15, fallbackAudioContext!.currentTime + 0.1); // Fade in
-			gainNode.gain.setValueAtTime(0.15, fallbackAudioContext!.currentTime + speechDuration * 0.8); // Sustain
-			gainNode.gain.linearRampToValueAtTime(0, fallbackAudioContext!.currentTime + speechDuration); // Fade out
+			gainNode.gain.setValueAtTime(0, fallbackAudioContext.currentTime);
+			gainNode.gain.linearRampToValueAtTime(0.15, fallbackAudioContext.currentTime + 0.1); // Fade in
+			gainNode.gain.setValueAtTime(0.15, fallbackAudioContext.currentTime + speechDuration * 0.8); // Sustain
+			gainNode.gain.linearRampToValueAtTime(0, fallbackAudioContext.currentTime + speechDuration); // Fade out
 			
 			// Start and stop the oscillator with better error handling
 			try {
-				oscillator.start(fallbackAudioContext!.currentTime);
-				oscillator.stop(fallbackAudioContext!.currentTime + speechDuration);
+				oscillator.start(fallbackAudioContext.currentTime);
+				oscillator.stop(fallbackAudioContext.currentTime + speechDuration);
 				
 				console.log('🔊 Enhanced fallback audio playing successfully');
 				
@@ -1130,12 +1142,15 @@ export default function Home() {
 		
 		if (!fallbackAudioContext) {
 			console.log('🔊 No audio context available for simple fallback');
+			// Last resort - just show text
 			setAiResponse(text);
 			setTimeout(() => setAiResponse(''), 4000);
 			return;
 		}
 
 		try {
+			console.log('🔊 Creating simple oscillator...');
+			
 			// Create a simple, stable beep sound for Pi compatibility
 			const oscillator = fallbackAudioContext.createOscillator();
 			const gainNode = fallbackAudioContext.createGain();
@@ -1153,6 +1168,7 @@ export default function Home() {
 			
 			// Start and stop with better error handling
 			try {
+				console.log('🔊 Starting simple oscillator...');
 				oscillator.start(fallbackAudioContext.currentTime);
 				oscillator.stop(fallbackAudioContext.currentTime + 0.6);
 				
@@ -2601,92 +2617,53 @@ export default function Home() {
 				}
 			}
 
-			utter.onerror = (event) => {
-				// Handle specific error types - note: TypeScript may not include all possible error types
-				const errorType = event.error as string
-				console.log('Speech synthesis error:', errorType);
-				
-				// Enable fallback audio for future attempts
-				setUseFallbackAudio(true);
-				
-				if (errorType === 'not-allowed' || errorType === 'authorization-failed') {
-					setSpeechPermissionGranted(false)
-					
-					// Fall back to text display without speech
-					if (emergencyTimer) clearTimeout(emergencyTimer)
-					setIsSpeaking(false)
-					setAiResponse(text)
-					setTimeout(() => {
-						setAiResponse('')
-						
-						// Launch pending game even if speech failed
-						if (pendingGame) {
-							launchGame(pendingGame.game, pendingGame.aiMode)
-							setPendingGameLaunch(null)
-						}
-						
-						if (!isProcessing) {
-							setTimeout(() => {
-								if (canStartRecognition()) {
-									startRecognition()
-								}
-							}, 2000)
-						}
-					}, 4000)
-					return
+				utter.onerror = (event) => {
+		// Handle specific error types - note: TypeScript may not include all possible error types
+		const errorType = event.error as string
+		console.log('❌ Speech synthesis error:', errorType);
+		console.log('🔊 Enabling fallback audio and trying to play response...');
+		
+		// Enable fallback audio for future attempts
+		setUseFallbackAudio(true);
+		
+		// Clear emergency timer
+		if (emergencyTimer) clearTimeout(emergencyTimer)
+		setIsSpeaking(false)
+		
+		// Always try fallback audio first, regardless of error type
+		console.log('🔊 Attempting fallback audio...');
+		playFallbackAudio(text);
+		
+		// Launch pending game after fallback audio
+		if (pendingGame) {
+			setTimeout(() => {
+				launchGame(pendingGame.game, pendingGame.aiMode)
+				setPendingGameLaunch(null)
+			}, 2000)
+		}
+		
+		// Restart recognition
+		if (!isProcessing) {
+			setTimeout(() => {
+				if (canStartRecognition()) {
+					startRecognition()
 				}
-				
-				if (errorType === 'interrupted' || errorType === 'canceled') {
-					if (emergencyTimer) clearTimeout(emergencyTimer)
-					setIsSpeaking(false)
-					setAiResponse('')
-					
-					// Launch pending game even if speech was interrupted
-					if (pendingGame) {
-						launchGame(pendingGame.game, pendingGame.aiMode)
-						setPendingGameLaunch(null)
-					}
-					
-					if (!isProcessing) {
-						setTimeout(() => {
-							if (canStartRecognition()) {
-								startRecognition()
-							}
-						}, 1000)
-					}
-					return
-				}
-				
-				// For other errors, try fallback audio
-				if (emergencyTimer) clearTimeout(emergencyTimer)
-				setIsSpeaking(false)
-				playFallbackAudio(text);
-				
-				// Launch pending game after fallback audio
-				if (pendingGame) {
-					setTimeout(() => {
-						launchGame(pendingGame.game, pendingGame.aiMode)
-						setPendingGameLaunch(null)
-					}, 2000)
-				}
-				
-				// Restart recognition
-				if (!isProcessing) {
-					setTimeout(() => {
-						if (canStartRecognition()) {
-							startRecognition()
-						}
-					}, 2000)
-				}
-			}
+			}, 2000)
+		}
+	}
 
 			// Try to speak
 			synth.speak(utter)
 			
 		} catch (error) {
-			console.error('Speech synthesis failed:', error)
+			console.error('❌ Speech synthesis failed:', error)
+			console.log('🔊 Enabling fallback audio due to speech synthesis failure...')
+			
 			// Enable fallback audio
 			setUseFallbackAudio(true)
+			
+			// Try fallback audio
+			console.log('🔊 Attempting fallback audio...')
 			playFallbackAudio(text)
 			
 			// Handle game launch and recognition restart
@@ -3110,6 +3087,29 @@ export default function Home() {
 										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B5CF6'}
 									>
 										🎵 Test Fallback
+									</button>
+									<button
+										onClick={() => {
+											console.log('🔊 Force enabling fallback audio...');
+											setUseFallbackAudio(true);
+											console.log('🔊 Fallback audio enabled:', true);
+											console.log('🔊 Current fallback context:', fallbackAudioContext);
+											console.log('🔊 Has user interacted:', hasUserInteracted);
+										}}
+										style={{
+											padding: '10px 20px',
+											backgroundColor: '#DC2626',
+											color: 'white',
+											border: 'none',
+											borderRadius: '25px',
+											fontSize: '14px',
+											cursor: 'pointer',
+											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+										}}
+										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#B91C1C'}
+										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DC2626'}
+									>
+										🔧 Force Fallback
 									</button>
 								</div>
 							</div>
