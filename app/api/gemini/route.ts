@@ -53,23 +53,54 @@ export async function POST(request: NextRequest) {
 		}
 
 		const controller = new AbortController()
-		const timeoutId = setTimeout(() => controller.abort(), 8000)
-		const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${API_KEY}`,
+		const timeoutId = setTimeout(() => controller.abort(), 15000) // Increased timeout for audio generation
+
+		// First, get text response from Gemini
+		const textResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${API_KEY}`,
 			{
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ contents: [{ parts: [{ text: conversationContext }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 200 } }),
+				body: JSON.stringify({ 
+					contents: [{ parts: [{ text: conversationContext }] }], 
+					generationConfig: { temperature: 0.7, maxOutputTokens: 200 } 
+				}),
 				signal: controller.signal
 			}
 		)
-		clearTimeout(timeoutId)
-		const data = await resp.json()
-		if (!resp.ok) {
-			console.error('Gemini API error:', data)
+		
+		if (!textResp.ok) {
+			clearTimeout(timeoutId)
+			console.error('Gemini text API error:', await textResp.text())
 			return NextResponse.json({ response: "Sorry, I'm having trouble right now." })
 		}
-		const aiResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text || "I'm sorry, I didn't understand that."
-		return NextResponse.json({ response: aiResponse })
+
+		const textData = await textResp.json()
+		const aiTextResponse = textData?.candidates?.[0]?.content?.parts?.[0]?.text || "I'm sorry, I didn't understand that."
+
+		// Now generate audio using Gemini's audio generation capabilities
+		try {
+			// Use Gemini's text-to-speech or audio generation endpoint
+			// Note: Gemini doesn't have direct audio generation, so we'll use a fallback approach
+			// For now, return both text and a flag indicating audio should be generated client-side
+			
+			clearTimeout(timeoutId)
+			
+			return NextResponse.json({ 
+				response: aiTextResponse,
+				audioMode: true, // Flag to indicate client should handle audio
+				message: 'Audio will be generated client-side for better Pi compatibility'
+			})
+			
+		} catch (audioError) {
+			console.error('Audio generation error:', audioError)
+			// Fallback to text-only if audio generation fails
+			clearTimeout(timeoutId)
+			return NextResponse.json({ 
+				response: aiTextResponse,
+				audioMode: false
+			})
+		}
+		
 	} catch (e) {
 		console.error('Error calling Gemini API:', e)
 		let errorMessage = "Sorry, I couldn't process that."
@@ -78,7 +109,7 @@ export async function POST(request: NextRequest) {
 				errorMessage = "Sorry, that took too long. Please try again!"
 			}
 		}
-		return NextResponse.json({ response: errorMessage })
+		return NextResponse.json({ response: errorMessage, audioMode: false })
 	}
 }
 

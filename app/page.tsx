@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import ColorDetectionGame from './components/ColorDetectionGame'
 import AudioPlayer from './components/AudioPlayer'
 import JitsiMeet from './components/JitsiMeet'
+import MP3Player from './components/MP3Player'
 import { createReminder, getDueRemindersForToday, toggleReminderComplete } from './services/reminders'
+import { audioGenerator, type AudioResponse } from './services/audioGenerator'
 import type { ReminderFormData } from './types/reminder'
 
 type ConversationMessage = { role: 'user' | 'assistant'; content: string }
@@ -811,6 +813,10 @@ export default function Home() {
 	const [showJitsiMeet, setShowJitsiMeet] = useState(false)
 	const [ticTacToeAiMode, setTicTacToeAiMode] = useState(false)
 	const [pendingGameLaunch, setPendingGameLaunch] = useState<{ game: 'tictactoe' | 'trivia' | 'sudoku' | 'color' | 'audio' | 'jitsi', aiMode: boolean } | null>(null)
+	
+	// MP3 Player state
+	const [showMP3Player, setShowMP3Player] = useState(false)
+	const [currentMP3Data, setCurrentMP3Data] = useState<{ audioUrl: string; text: string; duration: number } | null>(null)
 	const [speechPermissionGranted, setSpeechPermissionGranted] = useState(false)
 	const [voicesLoaded, setVoicesLoaded] = useState(false)
 	const [isAudioPlaying, setIsAudioPlaying] = useState(false)
@@ -865,11 +871,18 @@ export default function Home() {
 				// For Raspberry Pi, we need to handle the suspended state more carefully
 				if (audioContext.state === 'suspended') {
 					console.log('🔊 Audio context suspended, will resume on next user interaction');
-					// Don't set it yet, wait for actual user interaction
-					return;
+					// Try to resume immediately for Pi compatibility
+					audioContext.resume().then(() => {
+						console.log('🔊 Audio context resumed successfully');
+						setFallbackAudioContext(audioContext);
+					}).catch(error => {
+						console.error('❌ Failed to resume audio context:', error);
+						// Still set it - it might work on next interaction
+						setFallbackAudioContext(audioContext);
+					});
+				} else {
+					setFallbackAudioContext(audioContext);
 				}
-				
-				setFallbackAudioContext(audioContext);
 			} else {
 				console.log('❌ AudioContext not supported in this browser');
 			}
@@ -1000,7 +1013,7 @@ export default function Home() {
 					setAiResponse(text);
 					setTimeout(() => setAiResponse(''), 4000);
 				}
-			}, 200); // Reduced delay for better responsiveness
+			}, 500); // Increased delay for Pi stability
 			return;
 		}
 
@@ -1011,7 +1024,8 @@ export default function Home() {
 				try {
 					await fallbackAudioContext.resume();
 					console.log('🔊 Audio context resumed successfully');
-					playFallbackAudioInternal(text);
+					// Small delay for Pi stability
+					setTimeout(() => playFallbackAudioInternal(text), 100);
 				} catch (error) {
 					console.error('❌ Failed to resume audio context:', error);
 					// Fall back to text-only mode
@@ -1041,50 +1055,23 @@ export default function Home() {
 			
 			console.log(`🔊 Playing ${speechDuration.toFixed(1)}s of enhanced audio for ${wordCount} words`);
 			
-			// Create more sophisticated voice-like audio with better stability
+			// Create simple, stable audio for Pi compatibility
 			const oscillator = fallbackAudioContext!.createOscillator();
 			const gainNode = fallbackAudioContext!.createGain();
-			const filterNode = fallbackAudioContext!.createBiquadFilter();
 			
-			// Connect audio nodes
-			oscillator.connect(filterNode);
-			filterNode.connect(gainNode);
+			// Connect audio nodes (simplified for Pi stability)
+			oscillator.connect(gainNode);
 			gainNode.connect(fallbackAudioContext!.destination);
 			
-			// Voice-like characteristics with better stability
-			filterNode.type = 'lowpass';
-			filterNode.frequency.setValueAtTime(800, fallbackAudioContext!.currentTime);
-			filterNode.Q.setValueAtTime(1, fallbackAudioContext!.currentTime);
+			// Use a simple, pleasant frequency that works well on Pi
+			const baseFreq = 220; // A3 note
+			oscillator.frequency.setValueAtTime(baseFreq, fallbackAudioContext!.currentTime);
 			
-			// Dynamic frequency changes to simulate speech patterns with better timing
-			const baseFreq = 220; // A3 note - pleasant voice-like frequency
-			const freqVariations = [0, 2, -2, 4, -4, 2, 0, -2]; // Musical intervals
-			
-			// Create speech-like rhythm with varying pitch and volume
-			const timeStep = speechDuration / 8; // Divide speech into 8 segments
-			
-			for (let i = 0; i < 8; i++) {
-				const time = fallbackAudioContext!.currentTime + (i * timeStep);
-				const freq = baseFreq * Math.pow(2, freqVariations[i] / 12); // Musical scale
-				
-				// Set frequency for this segment
-				oscillator.frequency.setValueAtTime(freq, time);
-				
-				// Set volume envelope (attack, sustain, release) with better stability
-				const segmentDuration = timeStep * 0.8; // 80% of segment for sound
-				const fadeIn = timeStep * 0.1; // 10% fade in
-				const fadeOut = timeStep * 0.1; // 10% fade out
-				
-				// Fade in
-				gainNode.gain.setValueAtTime(0, time);
-				gainNode.gain.linearRampToValueAtTime(0.3, time + fadeIn); // Reduced volume for stability
-				
-				// Sustain
-				gainNode.gain.setValueAtTime(0.3, time + fadeIn);
-				
-				// Fade out
-				gainNode.gain.linearRampToValueAtTime(0, time + segmentDuration);
-			}
+			// Simple volume envelope - start quiet, fade in, fade out
+			gainNode.gain.setValueAtTime(0, fallbackAudioContext!.currentTime);
+			gainNode.gain.linearRampToValueAtTime(0.15, fallbackAudioContext!.currentTime + 0.1); // Fade in
+			gainNode.gain.setValueAtTime(0.15, fallbackAudioContext!.currentTime + speechDuration * 0.8); // Sustain
+			gainNode.gain.linearRampToValueAtTime(0, fallbackAudioContext!.currentTime + speechDuration); // Fade out
 			
 			// Start and stop the oscillator with better error handling
 			try {
@@ -1122,7 +1109,7 @@ export default function Home() {
 		}
 
 		try {
-			// Create a simple, stable beep sound
+			// Create a simple, stable beep sound for Pi compatibility
 			const oscillator = fallbackAudioContext.createOscillator();
 			const gainNode = fallbackAudioContext.createGain();
 			
@@ -1130,18 +1117,17 @@ export default function Home() {
 			oscillator.connect(gainNode);
 			gainNode.connect(fallbackAudioContext.destination);
 			
-			// Set stable audio parameters
+			// Set stable audio parameters (simplified for Pi)
 			oscillator.frequency.setValueAtTime(440, fallbackAudioContext.currentTime); // A4 note
-			oscillator.frequency.setValueAtTime(660, fallbackAudioContext.currentTime + 0.5); // E5 note
 			gainNode.gain.setValueAtTime(0, fallbackAudioContext.currentTime);
-			gainNode.gain.linearRampToValueAtTime(0.2, fallbackAudioContext.currentTime + 0.1); // Reduced volume for stability
-			gainNode.gain.setValueAtTime(0.2, fallbackAudioContext.currentTime + 0.4);
-			gainNode.gain.linearRampToValueAtTime(0, fallbackAudioContext.currentTime + 0.6);
+			gainNode.gain.linearRampToValueAtTime(0.15, fallbackAudioContext.currentTime + 0.1); // Fade in
+			gainNode.gain.setValueAtTime(0.15, fallbackAudioContext.currentTime + 0.4); // Sustain
+			gainNode.gain.linearRampToValueAtTime(0, fallbackAudioContext.currentTime + 0.6); // Fade out
 			
 			// Start and stop with better error handling
 			try {
 				oscillator.start(fallbackAudioContext.currentTime);
-				oscillator.stop(fallbackAudioContext.currentTime + 0.8);
+				oscillator.stop(fallbackAudioContext.currentTime + 0.6);
 				
 				console.log('🔊 Simple fallback audio playing successfully');
 				
@@ -2233,22 +2219,116 @@ export default function Home() {
 			}
 
 			const controller = new AbortController()
-			const timeoutId = setTimeout(() => controller.abort(), 10000)
-			const response = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text, conversationHistory: updatedHistory, ageGroup: selectedAgeGroup }), signal: controller.signal })
+			const timeoutId = setTimeout(() => controller.abort(), 15000) // Increased timeout for audio generation
+			const response = await fetch('/api/gemini', { 
+				method: 'POST', 
+				headers: { 'Content-Type': 'application/json' }, 
+				body: JSON.stringify({ message: text, conversationHistory: updatedHistory, ageGroup: selectedAgeGroup }), 
+				signal: controller.signal 
+			})
 			clearTimeout(timeoutId)
 			const data = await response.json().catch(() => null)
 			if (!data || !data.response) throw new Error('AI failed')
+			
 			const aiMessage: ConversationMessage = { role: 'assistant', content: data.response }
 			setConversationHistory([...updatedHistory, aiMessage])
 			
-			speakResponse(data.response, pendingGame)
+			// Check if we should use audio mode (MP3 generation)
+			if (data.audioMode && hasUserInteracted) {
+				console.log('🔊 Using audio mode - generating MP3 from Gemini response');
+				await speakResponseWithAudio(data.response, pendingGame);
+			} else {
+				console.log('🔊 Using text-to-speech mode');
+				speakResponse(data.response, pendingGame);
+			}
 		} catch (error) {
-
+			console.error('❌ Gemini API error:', error)
 			speakResponse('Sorry, I had trouble understanding that.')
 		} finally {
 			setIsProcessing(false)
 		}
 	}
+
+	// New function for MP3 audio generation with option to open player
+	const speakResponseWithAudio = async (text: string, pendingGame?: { game: 'tictactoe' | 'trivia' | 'sudoku' | 'color' | 'audio' | 'jitsi', aiMode: boolean } | null) => {
+		console.log('🔊 Generating MP3 audio for:', text);
+		
+		setIsSpeaking(true);
+		setAiResponse(text);
+		
+		try {
+			// Generate MP3 audio from text using our audio generator
+			const audioResponse = await audioGenerator.generateAudioFromText(text);
+			console.log('🔊 MP3 generated successfully:', audioResponse);
+			
+			// Show MP3 player option instead of autoplay
+			setCurrentMP3Data({
+				audioUrl: audioResponse.audioUrl,
+				text: text,
+				duration: audioResponse.duration
+			});
+			setShowMP3Player(true);
+			
+			// Set audio playing state
+			setIsAudioPlaying(true);
+			
+		} catch (error) {
+			console.error('❌ MP3 generation failed:', error);
+			// Fallback to regular speech synthesis
+			speakResponse(text, pendingGame);
+		}
+	};
+	
+	// MP3 Player handlers
+	const handleMP3PlayerClose = () => {
+		console.log('🔊 MP3 Player closed');
+		setShowMP3Player(false);
+		setCurrentMP3Data(null);
+		setIsSpeaking(false);
+		setIsAudioPlaying(false);
+		setAiResponse('');
+		
+		// Launch pending game if any
+		if (pendingGameLaunch) {
+			console.log('🎮 Launching pending game after MP3 player close:', pendingGameLaunch.game);
+			launchGame(pendingGameLaunch.game, pendingGameLaunch.aiMode);
+			setPendingGameLaunch(null);
+		}
+		
+		// Restart recognition
+		if (!isProcessing && canStartRecognition()) {
+			console.log('🔄 Restarting recognition after MP3 player close');
+			startRecognition();
+		}
+	};
+
+	const handleMP3PlayerDelete = () => {
+		console.log('🗑️ MP3 Player delete requested');
+		
+		if (currentMP3Data) {
+			// Revoke the object URL to free memory
+			URL.revokeObjectURL(currentMP3Data.audioUrl);
+		}
+		
+		setShowMP3Player(false);
+		setCurrentMP3Data(null);
+		setIsSpeaking(false);
+		setIsAudioPlaying(false);
+		setAiResponse('');
+		
+		// Launch pending game if any
+		if (pendingGameLaunch) {
+			console.log('🎮 Launching pending game after MP3 delete:', pendingGameLaunch.game);
+			launchGame(pendingGameLaunch.game, pendingGameLaunch.aiMode);
+			setPendingGameLaunch(null);
+		}
+		
+		// Restart recognition
+		if (!isProcessing && canStartRecognition()) {
+			console.log('🔄 Restarting recognition after MP3 delete');
+			startRecognition();
+		}
+	};
 
 	const speakResponse = (text: string, pendingGame?: { game: 'tictactoe' | 'trivia' | 'sudoku' | 'color' | 'audio' | 'jitsi', aiMode: boolean } | null) => {
 
@@ -2820,6 +2900,26 @@ export default function Home() {
 								</div>
 							)}
 
+							{/* MP3 Available Status */}
+							{showMP3Player && currentMP3Data && (
+								<div className="mp3-available-status" style={{ 
+									position: 'absolute', 
+									top: '140px', 
+									right: '20px',
+									padding: '8px 16px',
+									backgroundColor: '#10B981',
+									color: 'white',
+									borderRadius: '20px',
+									fontSize: '12px',
+									fontWeight: 'bold',
+									boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+									zIndex: '1000',
+									animation: 'userInteractionPulse 2s infinite'
+								}}>
+									🎵 MP3 Player Open
+								</div>
+							)}
+
 							{/* Age Group Indicator and Change Button */}
 							<div style={{ 
 								position: 'absolute', 
@@ -2911,6 +3011,25 @@ export default function Home() {
 									>
 										Open Jitsi Meet
 									</button>
+									<a
+										href="/audio-test"
+										style={{
+											padding: '10px 20px',
+											backgroundColor: '#F59E0B',
+											color: 'white',
+											border: 'none',
+											borderRadius: '25px',
+											fontSize: '14px',
+											cursor: 'pointer',
+											boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+											textDecoration: 'none',
+											display: 'inline-block'
+										}}
+										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D97706'}
+										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F59E0B'}
+									>
+										🔊 Audio Test
+									</a>
 								</div>
 							</div>
 						</div>
@@ -2953,6 +3072,17 @@ export default function Home() {
 					setTranscript('');
 					finalTranscriptRef.current = '';
 				}} />
+			)}
+			
+			{/* MP3 Player Modal */}
+			{showMP3Player && currentMP3Data && (
+				<MP3Player
+					audioUrl={currentMP3Data.audioUrl}
+					text={currentMP3Data.text}
+					duration={currentMP3Data.duration}
+					onClose={handleMP3PlayerClose}
+					onDelete={handleMP3PlayerDelete}
+				/>
 			)}
 		</>
 	)
