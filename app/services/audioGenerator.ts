@@ -187,12 +187,12 @@ export class AudioGenerator {
     // Write audio data with better error handling
     let offset = 44;
     try {
-      for (let i = 0; i < length; i++) {
-        for (let channel = 0; channel < numberOfChannels; channel++) {
-          const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
-          view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
-          offset += 2;
-        }
+    for (let i = 0; i < length; i++) {
+      for (let channel = 0; channel < numberOfChannels; channel++) {
+        const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+        offset += 2;
+      }
       }
     } catch (error) {
       console.error('❌ Error writing audio data:', error);
@@ -207,7 +207,7 @@ export class AudioGenerator {
   dispose() {
     if (this.audioContext) {
       try {
-        this.audioContext.close();
+      this.audioContext.close();
       } catch (error) {
         console.log('🔊 Audio context close error:', error);
       }

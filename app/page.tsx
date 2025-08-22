@@ -923,15 +923,22 @@ export default function Home() {
 				
 				// Try to resume immediately
 				if (audioContext.state === 'suspended') {
-					await audioContext.resume();
-					console.log('🔊 New audio context resumed successfully');
+					try {
+						await audioContext.resume();
+						console.log('🔊 New audio context resumed successfully');
+					} catch (resumeError) {
+						console.error('❌ Failed to resume new audio context:', resumeError);
+						// Still set it - it might work on next interaction
+						setFallbackAudioContext(audioContext);
+						return true;
+					}
 				}
 				
 				setFallbackAudioContext(audioContext);
 				return true;
 			}
 		} catch (error) {
-			console.error('❌ Failed to create/resume audio context:', error);
+			console.error('❌ Failed to create audio context:', error);
 		}
 		
 		return false;
@@ -959,8 +966,16 @@ export default function Home() {
 					  navigator.userAgent.includes('TightVNC') ||
 					  navigator.userAgent.includes('UltraVNC');
 		
-		if (isVNC) {
-			console.log('🔊 VNC detected - likely to have audio issues, enabling fallback');
+		// Check for Raspberry Pi indicators
+		const isRaspberryPi = navigator.userAgent.includes('Raspberry') || 
+							  navigator.userAgent.includes('Linux') ||
+							  navigator.platform.includes('Linux');
+		
+		console.log('🔊 VNC detected:', isVNC);
+		console.log('🔊 Raspberry Pi detected:', isRaspberryPi);
+		
+		if (isVNC || isRaspberryPi) {
+			console.log('🔊 VNC or Raspberry Pi detected - likely to have audio issues, enabling fallback');
 			setUseFallbackAudio(true);
 			return;
 		}
@@ -977,6 +992,19 @@ export default function Home() {
 					console.log('✅ Web Speech API working');
 					setUseFallbackAudio(false);
 				};
+				
+				// Set a timeout to catch cases where speech synthesis hangs
+				const timeout = setTimeout(() => {
+					console.log('🔊 Speech synthesis test timed out, enabling fallback');
+					setUseFallbackAudio(true);
+				}, 3000);
+				
+				testUtter.onend = () => {
+					clearTimeout(timeout);
+					console.log('✅ Web Speech API working');
+					setUseFallbackAudio(false);
+				};
+				
 				window.speechSynthesis.speak(testUtter);
 			} catch (error) {
 				console.log('❌ Web Speech API test failed:', error);
@@ -1013,7 +1041,7 @@ export default function Home() {
 					setAiResponse(text);
 					setTimeout(() => setAiResponse(''), 4000);
 				}
-			}, 500); // Increased delay for Pi stability
+			}, 1000); // Increased delay for Pi stability
 			return;
 		}
 
@@ -1025,12 +1053,11 @@ export default function Home() {
 					await fallbackAudioContext.resume();
 					console.log('🔊 Audio context resumed successfully');
 					// Small delay for Pi stability
-					setTimeout(() => playFallbackAudioInternal(text), 100);
+					setTimeout(() => playFallbackAudioInternal(text), 200);
 				} catch (error) {
 					console.error('❌ Failed to resume audio context:', error);
-					// Fall back to text-only mode
-					setAiResponse(text);
-					setTimeout(() => setAiResponse(''), 4000);
+					// Try to play anyway - it might work
+					setTimeout(() => playFallbackAudioInternal(text), 500);
 				}
 				return;
 			}
@@ -2489,7 +2516,38 @@ export default function Home() {
 	const startSpeech = (text: string, synth: SpeechSynthesis, pendingGame?: { game: 'tictactoe' | 'trivia' | 'sudoku' | 'color' | 'audio' | 'jitsi', aiMode: boolean } | null, emergencyTimer?: NodeJS.Timeout | null) => {
 		// If fallback audio is enabled or we're on Raspberry Pi, use fallback
 		if (useFallbackAudio || navigator.userAgent.includes('Raspberry') || navigator.userAgent.includes('Linux')) {
-			console.log('Using fallback audio for Raspberry Pi compatibility');
+			console.log('🔊 Using fallback audio for Raspberry Pi compatibility');
+			playFallbackAudio(text);
+			
+			// Handle game launch after fallback audio
+			if (pendingGame) {
+				setTimeout(() => {
+					launchGame(pendingGame.game, pendingGame.aiMode);
+					setPendingGameLaunch(null);
+				}, 2000);
+			}
+			
+			// Restart recognition
+			if (!isProcessing) {
+				setTimeout(() => {
+					if (canStartRecognition()) {
+						startRecognition();
+					}
+				}, 2000);
+			}
+			return;
+		}
+		
+		// Also check if we're on a platform that commonly has speech synthesis issues
+		const hasSpeechIssues = navigator.userAgent.includes('VNC') || 
+								navigator.userAgent.includes('RealVNC') ||
+								navigator.userAgent.includes('TightVNC') ||
+								navigator.userAgent.includes('UltraVNC') ||
+								navigator.platform.includes('Linux');
+		
+		if (hasSpeechIssues) {
+			console.log('🔊 Platform detected as having speech synthesis issues, using fallback');
+			setUseFallbackAudio(true);
 			playFallbackAudio(text);
 			
 			// Handle game launch after fallback audio
@@ -2874,9 +2932,12 @@ export default function Home() {
 									fontSize: '12px',
 									fontWeight: 'bold',
 									boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-									zIndex: 1000
+									zIndex: 1000,
+									animation: 'userInteractionPulse 2s infinite'
 								}}>
-									🔊 Fallback Audio Mode
+									🔊 Fallback Audio Mode (Pi Compatible)
+									<br />
+									<small>Speech synthesis disabled</small>
 								</div>
 							)}
 
@@ -3030,6 +3091,26 @@ export default function Home() {
 									>
 										🔊 Audio Test
 									</a>
+									<button
+										onClick={() => {
+											console.log('🔊 Testing fallback audio system...');
+											playFallbackAudio('This is a test of the fallback audio system. If you can hear this, the system is working correctly.');
+										}}
+										style={{
+											padding: '10px 20px',
+											backgroundColor: '#8B5CF6',
+											color: 'white',
+											border: 'none',
+											borderRadius: '25px',
+											fontSize: '14px',
+											cursor: 'pointer',
+											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+										}}
+										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7C3AED'}
+										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B5CF6'}
+									>
+										🎵 Test Fallback
+									</button>
 								</div>
 							</div>
 						</div>
