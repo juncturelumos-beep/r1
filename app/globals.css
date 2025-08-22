@@ -1,0 +1,148 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+html, body { height: 100%; }
+body { margin: 0; background: #000; color: #ededed; font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; }
+.container { width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; }
+.interface { display: flex; flex-direction: column; align-items: center; gap: 2rem; }
+.face { width: 70vw; height: 70vh; max-width: 800px; max-height: 600px; }
+.subtitle { color: #08AFC0; font-size: 1.5rem; text-align: center; max-width: 80vw; min-height: 2rem; display: flex; align-items: center; justify-content: center; opacity: 0.9; transition: all 0.3s ease; padding: 0.5rem 1rem; border-radius: 8px; background: rgba(8, 175, 192, 0.1); border: 1px solid rgba(8, 175, 192, 0.3); }
+.processing { color: #08AFC0; font-size: 1.2rem; text-align: center; opacity: 0.7; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+.thinking-dots { display: flex; gap: 0.2rem; }
+.thinking-dots span { animation: thinking 1.4s ease-in-out infinite; font-size: 2rem; line-height: 1; }
+.thinking-dots span:nth-child(1) { animation-delay: 0s; }
+.thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes thinking { 0%, 80%, 100% { opacity: 0.3; transform: scale(1); } 40% { opacity: 1; transform: scale(1.2); } }
+.mic-status { color: #08AFC0; font-size: 1rem; opacity: 0.7; text-align: center; }
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; }
+.modal-card { width: min(92vw, 400px); max-height: 90vh; overflow: auto; background: #111; border: 1px solid #333; border-radius: 12px; padding: 16px; }
+.permission-modal { 
+  width: min(92vw, 350px); 
+  background: #111; 
+  border: 1px solid #333; 
+  border-radius: 12px; 
+  padding: 20px; 
+  text-align: center;
+}
+.permission-modal h2 { 
+  margin: 0 0 12px 0; 
+  font-size: 1.5rem; 
+}
+.permission-modal p { 
+  margin: 0 0 16px 0; 
+  opacity: 0.8; 
+}
+.btn { background: #08AFC0; color: #000; border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+.btn.secondary { background: #333; color: #eee; border: 1px solid #555; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.square { width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; font-size: 28px; border-radius: 8px; border: 1px solid #08AFC0; background: rgba(8,175,192,0.08); color: #08AFC0; }
+.tic-tac-toe-grid { 
+  display: grid; 
+  grid-template-columns: repeat(3, 80px); 
+  grid-template-rows: repeat(3, 80px);
+  width: 240px; 
+  height: 240px; 
+  border: 2px solid #08AFC0; 
+  border-radius: 12px; 
+  overflow: hidden; 
+  margin: 0 auto;
+  position: relative;
+}
+.tic-tac-toe-square { 
+  width: 80px; 
+  height: 80px; 
+  border: none; 
+  border-right: 1px solid #08AFC0; 
+  border-bottom: 1px solid #08AFC0; 
+  background: rgba(8,175,192,0.05); 
+  color: #08AFC0; 
+  font-size: 32px; 
+  font-weight: bold; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  transition: background-color 0.2s ease;
+  position: relative;
+  box-sizing: border-box;
+}
+.tic-tac-toe-square:hover:not(:disabled) { 
+  background: rgba(8,175,192,0.15); 
+}
+.tic-tac-toe-square:nth-child(3n) { border-right: none; }
+.tic-tac-toe-square:nth-child(7), .tic-tac-toe-square:nth-child(8), .tic-tac-toe-square:nth-child(9) { border-bottom: none; }
+.tic-tac-toe-modal { 
+  width: min(92vw, 320px); 
+  max-height: 90vh; 
+  overflow: auto; 
+  background: #111; 
+  border: 1px solid #333; 
+  border-radius: 12px; 
+  padding: 16px;
+  text-align: center;
+}
+.header-actions { position: fixed; top: 12px; right: 12px; display: flex; gap: 8px; }
+@media (max-width: 768px) { .face { width: 90vw; height: 60vh; } .subtitle { font-size: 1.2rem; max-width: 90vw; } }
+
+/* -- Animations for the face -- */
+
+/* Blinking animation for the eyes */
+@keyframes blink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+
+.blinking-eyes {
+  animation: blink 4s infinite;
+  transform-origin: center;
+}
+
+/* Speaking animation for the mouth */
+@keyframes speak {
+  0%, 100% { d: path('M520 550 Q600 600 680 550'); }
+  50% { d: path('M510 555 Q600 620 690 555'); }
+}
+
+.speaking-mouth {
+  animation: speak 0.7s infinite;
+}
+
+/* Color detection game animations */
+@keyframes pulse {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+  50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+}
+
+@keyframes successPulse {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes colorGameFadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes colorDetected {
+  0% { background-color: rgba(8, 175, 192, 0.2); }
+  50% { background-color: rgba(34, 197, 94, 0.4); }
+  100% { background-color: rgba(8, 175, 192, 0.2); }
+}
+
+.color-game-modal {
+  animation: colorGameFadeIn 0.3s ease-out;
+}
+
+.detection-circle {
+  transition: all 0.3s ease;
+}
+
+.detection-circle.active {
+  animation: pulse 1s infinite;
+}
+
+.detection-circle.success {
+  animation: colorDetected 0.5s ease-out;
+}
+
