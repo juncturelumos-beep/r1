@@ -62,7 +62,7 @@ export class ElevenLabsService {
     });
   }
 
-  public async generateSpeech(text: string): Promise<ElevenLabsResponse> {
+  public async generateSpeech(text: string, format: 'mp3' | 'wav' = 'mp3'): Promise<ElevenLabsResponse> {
     if (!this.apiKey) {
       return {
         success: false,
@@ -80,6 +80,7 @@ export class ElevenLabsService {
     try {
       console.log('🔊 Generating ElevenLabs speech for:', text.substring(0, 50) + '...');
       console.log('🔊 Using voice ID:', this.voiceId);
+      console.log('🔊 Requested format:', format);
       console.log('🔊 API endpoint:', `${this.baseUrl}/text-to-speech/${this.voiceId}`);
       
       const requestBody = {
@@ -93,12 +94,22 @@ export class ElevenLabsService {
       
       console.log('🔊 Request body:', JSON.stringify(requestBody, null, 2));
       
+      // Set headers based on requested format
+      const headers: Record<string, string> = {
+        'xi-api-key': this.apiKey,
+        'Content-Type': 'application/json'
+      };
+      
+      // Request specific audio format
+      if (format === 'wav') {
+        headers['Accept'] = 'audio/wav';
+      } else {
+        headers['Accept'] = 'audio/mpeg'; // MP3
+      }
+      
       const response = await fetch(`${this.baseUrl}/text-to-speech/${this.voiceId}`, {
         method: 'POST',
-        headers: {
-          'xi-api-key': this.apiKey,
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify(requestBody)
       });
 
@@ -131,6 +142,13 @@ export class ElevenLabsService {
       console.log('🔊 Audio blob size:', audioBlob.size, 'bytes');
       console.log('🔊 Audio blob type:', audioBlob.type);
       
+      // Check if we got the expected format
+      if (format === 'wav' && !audioBlob.type.includes('wav')) {
+        console.warn('⚠️ Requested WAV but got:', audioBlob.type);
+      } else if (format === 'mp3' && !audioBlob.type.includes('mpeg')) {
+        console.warn('⚠️ Requested MP3 but got:', audioBlob.type);
+      }
+      
       const audioUrl = URL.createObjectURL(audioBlob);
       console.log('🔊 Created audio URL:', audioUrl);
       
@@ -149,6 +167,29 @@ export class ElevenLabsService {
         error: error instanceof Error ? error.message : 'Unknown error occurred'
       };
     }
+  }
+
+  // Try WAV format if MP3 fails (for Raspberry Pi compatibility)
+  public async generateSpeechWithFallback(text: string): Promise<ElevenLabsResponse> {
+    console.log('🔊 Attempting MP3 format first...');
+    
+    // Try MP3 first
+    const mp3Result = await this.generateSpeech(text, 'mp3');
+    if (mp3Result.success) {
+      return mp3Result;
+    }
+    
+    console.log('❌ MP3 failed, trying WAV format...');
+    
+    // If MP3 fails, try WAV
+    const wavResult = await this.generateSpeech(text, 'wav');
+    if (wavResult.success) {
+      console.log('✅ WAV format successful');
+      return wavResult;
+    }
+    
+    // If both fail, return the last error
+    return wavResult;
   }
 
   public async testConnection(): Promise<boolean> {

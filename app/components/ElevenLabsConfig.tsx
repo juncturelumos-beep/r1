@@ -64,8 +64,8 @@ export default function ElevenLabsConfig({ onClose, onConfigured }: ElevenLabsCo
       setIsTesting(true);
       setTestResult('🎵 Testing speech generation...');
       
-      // Test speech generation
-      const result = await elevenLabsService.generateSpeech('Hello! This is a test of the ElevenLabs text-to-speech system.');
+      // Test speech generation with format fallback for Raspberry Pi
+      const result = await elevenLabsService.generateSpeechWithFallback('Hello! This is a test of the ElevenLabs text-to-speech system.');
       
       if (result.success && result.audioUrl) {
         setTestResult('✅ Test successful! Playing audio...');

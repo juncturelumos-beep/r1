@@ -12,7 +12,7 @@ export default function ElevenLabsDebug() {
     setTestResults(prev => [...prev, `${new Date().toLocaleTimeString()}: ${result}`]);
   };
 
-  const testElevenLabsAPI = async () => {
+    const testElevenLabsAPI = async () => {
     setIsLoading(true);
     addResult('🔍 Testing ElevenLabs API connection...');
     
@@ -26,9 +26,9 @@ export default function ElevenLabsDebug() {
         return;
       }
 
-      // Test voice generation
-      addResult('🎵 Generating test speech...');
-      const result = await elevenLabsService.generateSpeech('Hello! This is a test of ElevenLabs text-to-speech.');
+      // Test voice generation with format fallback
+      addResult('🎵 Generating test speech with format fallback...');
+      const result = await elevenLabsService.generateSpeechWithFallback('Hello! This is a test of ElevenLabs text-to-speech.');
       
       if (result.success && result.audioUrl) {
         addResult('✅ Speech generation successful');
@@ -41,6 +41,29 @@ export default function ElevenLabsDebug() {
       }
     } catch (error) {
       addResult(`❌ API test error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testWAVFormat = async () => {
+    setIsLoading(true);
+    addResult('🎵 Testing WAV format specifically...');
+    
+    try {
+      const result = await elevenLabsService.generateSpeech('Hello! This is a WAV format test.', 'wav');
+      
+      if (result.success && result.audioUrl) {
+        addResult('✅ WAV generation successful');
+        addResult(`🔗 Audio URL: ${result.audioUrl.substring(0, 50)}...`);
+        
+        // Test audio playback
+        await testAudioPlayback(result.audioUrl);
+      } else {
+        addResult(`❌ WAV generation failed: ${result.error}`);
+      }
+    } catch (error) {
+      addResult(`❌ WAV test error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -112,27 +135,34 @@ export default function ElevenLabsDebug() {
         {/* Test Controls */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Debug Tests</h2>
-          <div className="flex gap-4">
-            <button
-              onClick={testElevenLabsAPI}
-              disabled={isLoading}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-            >
-              {isLoading ? 'Testing...' : '🔍 Test ElevenLabs API'}
-            </button>
-            <button
-              onClick={testUserInteraction}
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-            >
-              👆 Test User Interaction
-            </button>
-            <button
-              onClick={clearResults}
-              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-            >
-              🗑️ Clear Results
-            </button>
-          </div>
+                     <div className="flex gap-4">
+             <button
+               onClick={testElevenLabsAPI}
+               disabled={isLoading}
+               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+             >
+               {isLoading ? 'Testing...' : '🔍 Test ElevenLabs API'}
+             </button>
+             <button
+               onClick={testWAVFormat}
+               disabled={isLoading}
+               className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50"
+             >
+               {isLoading ? 'Testing...' : '🎵 Test WAV Format'}
+             </button>
+             <button
+               onClick={testUserInteraction}
+               className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+             >
+               👆 Test User Interaction
+             </button>
+             <button
+               onClick={clearResults}
+               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+             >
+               🗑️ Clear Results
+             </button>
+           </div>
         </div>
 
         {/* Test Results */}

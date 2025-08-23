@@ -2576,8 +2576,8 @@ export default function Home() {
 			setIsSpeaking(true);
 			setAiResponse(text);
 			
-			// Generate speech using ElevenLabs
-			const result = await elevenLabsService.generateSpeech(text);
+			// Generate speech using ElevenLabs with format fallback for Raspberry Pi
+			const result = await elevenLabsService.generateSpeechWithFallback(text);
 			
 			if (result.success && result.audioUrl) {
 				console.log('✅ ElevenLabs speech generated successfully');
@@ -3501,6 +3501,42 @@ export default function Home() {
 										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#059669'}
 									>
 										🔧 Test API
+									</button>
+									<button
+										onClick={async () => {
+											console.log('🔊 Testing WAV format specifically...');
+											try {
+												const result = await elevenLabsService.generateSpeech('WAV test message', 'wav');
+												console.log('🔊 WAV result:', result);
+												if (result.success) {
+													console.log('✅ WAV format working');
+													// Try to play the audio
+													const audio = new Audio(result.audioUrl);
+													audio.onerror = (e) => console.error('❌ WAV audio play error:', e);
+													audio.onplay = () => console.log('✅ WAV audio playing');
+													audio.onended = () => console.log('✅ WAV audio ended');
+													audio.play().catch(e => console.error('❌ WAV audio play failed:', e));
+												} else {
+													console.error('❌ WAV format failed:', result.error);
+												}
+											} catch (error) {
+												console.error('❌ WAV test error:', error);
+											}
+										}}
+										style={{
+											padding: '10px 20px',
+											backgroundColor: '#8B5CF6',
+											color: 'white',
+											border: 'none',
+											borderRadius: '25px',
+											fontSize: '14px',
+											cursor: 'pointer',
+											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+										}}
+										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7C3AED'}
+										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B5CF6'}
+									>
+										🎵 Test WAV
 									</button>
 								</div>
 							</div>
