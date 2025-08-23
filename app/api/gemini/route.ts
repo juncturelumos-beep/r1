@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
 			return NextResponse.json({ error: 'Message is required' }, { status: 400 })
 		}
 
-		const API_KEY = 'AIzaSyAVDE3Dfq9iDUKLuiKTabCAkA0nb-QbCWY'
+		const API_KEY = 'AIzaSyCu7pp0aiP3CluOLpvWsxmNKngabxEGALY'
 		// Build instruction context from local file
 		let instructions = 'You are a friendly AI robot assistant named Antara who looks after little children,elderly people and teens who were left at home by their working parents. Keep responses under 30 words.'
 		try {
@@ -41,11 +41,11 @@ export async function POST(request: NextRequest) {
 		if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
 			conversationContext += '\n\nCONVERSATION HISTORY:\n'
 			for (const msg of conversationHistory) {
-				const role = msg.role === 'user' ? 'CHILD' : 'ONEROBO'
+				const role = msg.role === 'user' ? 'CHILD' : 'ANTARA'
 				conversationContext += `${role}: ${msg.content}\n`
 			}
 		}
-		conversationContext += `\nCHILD: "${message}"\n\nONEROBO, respond as yourself in 1-3 sentences.`
+		conversationContext += `\nCHILD: "${message}"\n\nANTARA, respond as yourself in 1-3 sentences.`
 
 		if (!API_KEY) {
 			// Simple local echo if no key

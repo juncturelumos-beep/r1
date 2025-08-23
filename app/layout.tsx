@@ -1,6 +1,6 @@
 import './globals.css'
 export const metadata = {
-	title: 'OneRobo Games',
+	title: 'Antara Games',
 	description: 'Talking AI that can launch games on command',
 };
 

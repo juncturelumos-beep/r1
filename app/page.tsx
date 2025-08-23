@@ -118,7 +118,7 @@ function TicTacToe({ onClose, aiMode = false, onGameEnd }: { onClose: () => void
 					}
 				}
 				setIsAiThinking(false)
-			}, 800 + Math.random() * 700) // Random delay between 0.8-1.5s
+			}, 8000 + Math.random() * 700) // Random delay between 0.8-1.5s
 		} else {
 			setXIsNext(!xIsNext)
 		}
@@ -768,7 +768,7 @@ export default function Home() {
 	const [selectedAgeGroup, setSelectedAgeGroup] = useState<'CHILD' | 'TEEN-ADULT' | 'OLD' | null>(() => {
 		// Load age group from localStorage on component mount
 		if (typeof window !== 'undefined') {
-			const saved = localStorage.getItem('oneRoboAgeGroup')
+			const saved = localStorage.getItem('antaraAgeGroup')
 			return saved as 'CHILD' | 'TEEN-ADULT' | 'OLD' | null
 		}
 		return null
@@ -778,9 +778,9 @@ export default function Home() {
 	const saveAgeGroup = (ageGroup: 'CHILD' | 'TEEN-ADULT' | 'OLD' | null) => {
 		if (typeof window !== 'undefined') {
 			if (ageGroup) {
-				localStorage.setItem('oneRoboAgeGroup', ageGroup)
+				localStorage.setItem('antaraAgeGroup', ageGroup)
 			} else {
-				localStorage.removeItem('oneRoboAgeGroup')
+				localStorage.removeItem('antaraAgeGroup')
 			}
 		}
 	}
@@ -806,6 +806,7 @@ export default function Home() {
 	const [isProcessing, setIsProcessing] = useState(false)
 	const [aiResponse, setAiResponse] = useState('')
 	const [isListening, setIsListening] = useState(false)
+	const currentAudioRef = useRef<HTMLAudioElement | null>(null)
 	const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([])
 	const [showTicTacToe, setShowTicTacToe] = useState(false)
 	const [showTrivia, setShowTrivia] = useState(false)
@@ -1053,6 +1054,13 @@ export default function Home() {
 		console.log('🔊 Fallback audio context state:', fallbackAudioContext?.state || 'null');
 		console.log('🔊 Has user interacted:', hasUserInteracted);
 		
+		// Stop any currently playing audio before playing new fallback audio
+		if (currentAudioRef.current) {
+			currentAudioRef.current.pause();
+			currentAudioRef.current.src = ''; // Clear the source
+			currentAudioRef.current = null;
+		}
+		
 		if (!fallbackAudioContext) {
 			console.log('🔊 Creating audio context on demand...');
 			const success = await createAndResumeAudioContext();
@@ -1060,7 +1068,11 @@ export default function Home() {
 			if (!success) {
 				console.log('❌ Audio context creation failed, falling back to text-only');
 				setAiResponse(text);
-				setTimeout(() => setAiResponse(''), 4000);
+				setIsAudioPlaying(true);
+				setTimeout(() => {
+					setAiResponse('');
+					setIsAudioPlaying(false);
+				}, 4000);
 				return;
 			}
 			
@@ -1072,7 +1084,11 @@ export default function Home() {
 				} else {
 					console.log('❌ Audio context creation failed, falling back to text-only');
 					setAiResponse(text);
-					setTimeout(() => setAiResponse(''), 4000);
+					setIsAudioPlaying(true);
+					setTimeout(() => {
+						setAiResponse('');
+						setIsAudioPlaying(false);
+					}, 4000);
 				}
 			}, 1000); // Increased delay for Pi stability
 			return;
@@ -1114,7 +1130,11 @@ export default function Home() {
 				console.error('❌ No fallback audio context available');
 				// Last resort - just show text
 				setAiResponse(text);
-				setTimeout(() => setAiResponse(''), 4000);
+				setIsAudioPlaying(true);
+				setTimeout(() => {
+					setAiResponse('');
+					setIsAudioPlaying(false);
+				}, 4000);
 				return;
 			}
 			
@@ -1175,7 +1195,11 @@ export default function Home() {
 			console.log('🔊 No audio context available for simple fallback');
 			// Last resort - just show text
 			setAiResponse(text);
-			setTimeout(() => setAiResponse(''), 4000);
+			setIsAudioPlaying(true);
+			setTimeout(() => {
+				setAiResponse('');
+				setIsAudioPlaying(false);
+			}, 4000);
 			return;
 		}
 
@@ -1213,14 +1237,22 @@ export default function Home() {
 				console.error('❌ Simple oscillator error:', oscillatorError);
 				// Last resort - just show text
 				setAiResponse(text);
-				setTimeout(() => setAiResponse(''), 4000);
+				setIsAudioPlaying(true);
+				setTimeout(() => {
+					setAiResponse('');
+					setIsAudioPlaying(false);
+				}, 4000);
 			}
 			
 		} catch (error) {
 			console.error('❌ Simple fallback audio failed:', error);
 			// Last resort - just show text
 			setAiResponse(text);
-			setTimeout(() => setAiResponse(''), 4000);
+			setIsAudioPlaying(true);
+			setTimeout(() => {
+				setAiResponse('');
+				setIsAudioPlaying(false);
+			}, 4000);
 		}
 	};
 
@@ -2574,9 +2606,16 @@ export default function Home() {
 		console.log('🔊 Text to speak:', text.substring(0, 50) + '...');
 		console.log('🔊 Pending game:', pendingGame);
 		console.log('🔊 Has user interacted:', hasUserInteracted);
-		
+
+		// Stop any currently playing audio
+		if (currentAudioRef.current) {
+			currentAudioRef.current.pause();
+			currentAudioRef.current.src = ''; // Clear the source
+			currentAudioRef.current = null;
+		}
+
 		try {
-			setIsSpeaking(true);
+			setIsAudioPlaying(true);
 			setAiResponse(text);
 			
 			// Generate speech using ElevenLabs with format fallback for Raspberry Pi
@@ -2588,6 +2627,7 @@ export default function Home() {
 				
 				// Create audio element with better error handling
 				const audio = new Audio();
+				currentAudioRef.current = audio; // Store reference to current audio
 				
 				// Add comprehensive event listeners for debugging
 				audio.onloadstart = () => {
@@ -2604,8 +2644,9 @@ export default function Home() {
 				
 				audio.onended = () => {
 					console.log('🔊 ElevenLabs audio finished');
-					setIsSpeaking(false);
+					setIsAudioPlaying(false);
 					setAiResponse('');
+					currentAudioRef.current = null; // Clear reference on end
 				
 				// Launch pending game after speech ends
 				if (pendingGame) {
@@ -2626,27 +2667,11 @@ export default function Home() {
 				audio.onerror = (error) => {
 					console.error('❌ ElevenLabs audio playback error:', error);
 					console.error('❌ Audio error details:', audio.error);
-					setIsSpeaking(false);
+					setIsAudioPlaying(false);
 					setAiResponse('');
-					
-					// Fall back to text display
-					setTimeout(() => {
-						setAiResponse('');
-						
-						// Launch pending game even if audio failed
-						if (pendingGame) {
-							launchGame(pendingGame.game, pendingGame.aiMode);
-							setPendingGameLaunch(null);
-						}
-						
-						if (!isProcessing) {
-							setTimeout(() => {
-								if (canStartRecognition()) {
-									startRecognition();
-								}
-							}, 2000);
-						}
-					}, 4000);
+					currentAudioRef.current = null; // Clear reference on error
+					// Fallback to text only display
+					playFallbackAudio(text);
 				};
 				
 				// Set the audio source
@@ -3160,11 +3185,11 @@ export default function Home() {
 
 	const Mouth = () => {
 		if (isSpeaking) {
-			const baseRadius = 25
-			const r = baseRadius + Math.sin(mouthAnimation * 6) * 15
-			return (<circle cx="600" cy="500" r={r} fill="none" stroke="#08AFC0" strokeWidth="8" opacity={0.8 + Math.sin(mouthAnimation * 4) * 0.2} />)
+			const mouthRadius = 40
+			const r = mouthRadius + Math.sin(mouthAnimation * 6) * 25
+			return (<circle cx="600" cy="500" r={r} fill="none" stroke="#08AFC0" strokeWidth="12" opacity={0.8 + Math.sin(mouthAnimation * 4) * 0.2} />)
 		}
-		return (<line x1="580" y1="500" x2="620" y2="500" stroke="#08AFC0" strokeWidth="6" strokeLinecap="round" />)
+		return (<line x1="560" y1="500" x2="640" y2="500" stroke="#08AFC0" strokeWidth="10" strokeLinecap="round" />)
 	}
 
 	// System recovery mechanism - handles unexpected crashes and restores functionality
@@ -3230,7 +3255,7 @@ export default function Home() {
 			{!selectedAgeGroup && (
 				<div className="modal-backdrop">
 					<div className="permission-modal">
-						<h2>Welcome to OneRobo!</h2>
+						<h2>Welcome to Antara!</h2>
 						<p>Please select your age group so I can provide the best experience for you:</p>
 						<div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px' }}>
 							<button 
@@ -3318,31 +3343,31 @@ export default function Home() {
 
 									{/* Eyes */}
 									<g className="blinking-eyes">
-										<circle cx="400" cy="350" r="80" fill="url(#eye-gradient)" />
-										<circle cx="400" cy="350" r="40" fill="#000" />
-										<circle cx="420" cy="320" r="18" fill="#fff" />
-										<circle cx="380" cy="380" r="9" fill="#fff" opacity="0.7" />
+										<circle cx="400" cy="350" r="120" fill="url(#eye-gradient)" />
+										<circle cx="400" cy="350" r="60" fill="#000" />
+										<circle cx="430" cy="310" r="25" fill="#fff" />
+										<circle cx="370" cy="390" r="15" fill="#fff" opacity="0.7" />
 									</g>
 									<g className="blinking-eyes">
-										<circle cx="800" cy="350" r="80" fill="url(#eye-gradient)" />
-										<circle cx="800" cy="350" r="40" fill="#000" />
-										<circle cx="820" cy="320" r="18" fill="#fff" />
-										<circle cx="780" cy="380" r="9" fill="#fff" opacity="0.7" />
+										<circle cx="800" cy="350" r="120" fill="url(#eye-gradient)" />
+										<circle cx="800" cy="350" r="60" fill="#000" />
+										<circle cx="830" cy="310" r="25" fill="#fff" />
+										<circle cx="770" cy="390" r="15" fill="#fff" opacity="0.7" />
 									</g>
 
 									{/* Mouth */}
 									<path
 										className={isSpeaking ? 'speaking-mouth' : ''}
-										d="M520 550 Q600 600 680 550"
+										d="M480 550 Q600 650 720 550"
 										stroke="#08AFC0"
-										strokeWidth="8"
+										strokeWidth="12"
 										fill="none"
 										strokeLinecap="round"
 									/>
 								</g>
 							</svg>
 							{(aiResponse || transcript) && (
-								<div className="subtitle">{aiResponse ? aiResponse : transcript}</div>
+								<div className="subtitle">{isAudioPlaying ? aiResponse : transcript}</div>
 							)}
 							{isProcessing && (
 								<div className="processing"><div className="thinking-dots"><span>.</span><span>.</span><span>.</span></div>AI is thinking...</div>
@@ -3392,33 +3417,11 @@ export default function Home() {
 								</div>
 							)}
 
-							{/* Google TTS Status */}
-							{useGoogleTTS && (
-								<div className="google-tts-status" style={{ 
-									position: 'absolute', 
-									top: '100px', 
-									right: '20px',
-									padding: '8px 16px',
-									backgroundColor: '#10B981',
-									color: 'white',
-									borderRadius: '20px',
-									fontSize: '12px',
-									fontWeight: 'bold',
-									boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-									zIndex: 1000,
-									animation: 'userInteractionPulse 2s infinite'
-								}}>
-									🔊 Google TTS Default
-									<br />
-									<small>Primary speech synthesis</small>
-								</div>
-							)}
-
 							{/* Fallback Audio Status */}
 							{useFallbackAudio && !useElevenLabs && !useGoogleTTS && (
 								<div className="fallback-audio-status" style={{ 
 									position: 'absolute', 
-									top: '140px', 
+									top: '100px', 
 									right: '20px',
 									padding: '8px 16px',
 									backgroundColor: '#F59E0B',
@@ -3440,7 +3443,7 @@ export default function Home() {
 							{!hasUserInteracted && (
 								<div className="user-interaction-status" style={{ 
 									position: 'absolute', 
-									top: '180px', 
+									top: '140px', 
 									right: '20px',
 									padding: '8px 16px',
 									backgroundColor: '#EF4444',
@@ -3460,7 +3463,7 @@ export default function Home() {
 							{showMP3Player && currentMP3Data && (
 								<div className="mp3-available-status" style={{ 
 									position: 'absolute', 
-									top: '220px', 
+									top: '180px', 
 									right: '20px',
 									padding: '8px 16px',
 									backgroundColor: '#10B981',
@@ -3531,444 +3534,7 @@ export default function Home() {
 							</div>
 
 							{/* Manual AudioPlayer Button for Testing */}
-							<div className="manual-controls" style={{ position: 'absolute', bottom: '20px', left: '50%', transform: 'translateX(-50%)' }}>
-								<div style={{ display: 'flex', gap: '10px' }}>
-									<button
-										onClick={() => setShowAudioPlayer(true)}
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#08AFC0',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0699A8'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#08AFC0'}
-									>
-										Open Audio Player
-									</button>
-									<button
-										onClick={() => setShowJitsiMeet(true)}
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#10B981',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#059669'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10B981'}
-									>
-										Open Jitsi Meet
-									</button>
-									<a
-										href="/audio-test"
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#F59E0B',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-											textDecoration: 'none',
-											display: 'inline-block'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#D97706'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#F59E0B'}
-									>
-										🔊 Audio Test
-									</a>
-									<a
-										href="/elevenlabs-debug"
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#8B5CF6',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
-											textDecoration: 'none',
-											display: 'inline-block'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7C3AED'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B5CF6'}
-									>
-										🔧 ElevenLabs Debug
-									</a>
-									<button
-										onClick={() => {
-											console.log('🔊 Testing fallback audio system...');
-											playFallbackAudio('This is a test of the fallback audio system. If you can hear this, the system is working correctly.');
-										}}
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#8B5CF6',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7C3AED'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B5CF6'}
-									>
-										🎵 Test Fallback
-									</button>
-									<button
-										onClick={() => {
-											console.log('🔊 Force enabling fallback audio...');
-											setUseFallbackAudio(true);
-											console.log('🔊 Fallback audio enabled:', true);
-											console.log('🔊 Current fallback context:', fallbackAudioContext);
-											console.log('🔊 Has user interacted:', hasUserInteracted);
-										}}
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#DC2626',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#B91C1C'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DC2626'}
-									>
-										🔧 Force Fallback
-									</button>
-									<button
-										onClick={() => setShowElevenLabsConfig(true)}
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#8B5CF6',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7C3AED'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B5CF6'}
-									>
-										🎵 ElevenLabs
-									</button>
-									<button
-										onClick={async () => {
-											console.log('🔊 Enabling Google TTS...');
-											try {
-												// Import Google TTS service dynamically
-												const { GoogleTTSService } = await import('./services/googleTTS');
-												const googleTTS = new GoogleTTSService();
-												
-												// Test Google TTS with a simple message
-												const result = await googleTTS.generateSpeech('Google TTS is now enabled!');
-												
-												if (result.success && result.audioUrl) {
-													console.log('✅ Google TTS enabled successfully');
-													
-													// Play the test message
-													const audio = new Audio(result.audioUrl);
-													audio.onerror = (e) => console.error('❌ Google TTS audio play error:', e);
-													audio.onplay = () => console.log('✅ Google TTS audio playing');
-													audio.onended = () => {
-														console.log('✅ Google TTS audio ended');
-														// Clean up the audio URL
-														googleTTS.cleanupAudioUrl(result.audioUrl!);
-													};
-													
-													// Set Google TTS as the preferred method
-													setUseElevenLabs(false);
-													setUseFallbackAudio(false);
-													setUseGoogleTTS(true);
-													
-													audio.play().catch(e => console.error('❌ Google TTS audio play failed:', e));
-												} else {
-													console.error('❌ Google TTS failed:', result.error);
-													alert('Failed to enable Google TTS. Please check the console for details.');
-												}
-											} catch (error) {
-												console.error('❌ Google TTS enable error:', error);
-												alert('Failed to enable Google TTS. Please check the console for details.');
-											}
-										}}
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#10B981',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#059669'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10B981'}
-									>
-										🔊 Enable Google TTS
-									</button>
-									<button
-										onClick={() => {
-											console.log('🔊 Disabling Google TTS...');
-											setUseGoogleTTS(false);
-											setUseElevenLabs(true);
-											setUseFallbackAudio(false);
-											console.log('✅ Google TTS disabled, ElevenLabs re-enabled');
-										}}
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#DC2626',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#B91C1C'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DC2626'}
-									>
-										🔇 Disable Google TTS
-									</button>
-									<button
-										onClick={() => {
-											console.log('🔊 Manual ElevenLabs check...');
-											console.log('🔊 ElevenLabs configured:', elevenLabsService.isConfigured());
-											console.log('🔊 useElevenLabs state:', useElevenLabs);
-											checkElevenLabsAvailability();
-										}}
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#059669',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#047857'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#059669'}
-									>
-										🔍 Check Status
-									</button>
-									<button
-										onClick={() => {
-											console.log('🔊 Testing ElevenLabs speech directly...');
-											speakWithElevenLabs('Hello! This is a test of ElevenLabs TTS on your robot!', null);
-										}}
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#DC2626',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#B91C1C'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DC2626'}
-									>
-										🎵 Test Speech
-									</button>
-									<button
-										onClick={async () => {
-											console.log('🔊 Testing ElevenLabs API directly...');
-											try {
-												const result = await elevenLabsService.generateSpeech('Test message');
-												console.log('🔊 ElevenLabs result:', result);
-												if (result.success) {
-													console.log('✅ ElevenLabs API working');
-													// Try to play the audio
-													const audio = new Audio(result.audioUrl);
-													audio.onerror = (e) => console.error('❌ Audio play error:', e);
-													audio.onplay = () => console.log('✅ Audio playing');
-													audio.onended = () => console.log('✅ Audio ended');
-													audio.play().catch(e => console.error('❌ Audio play failed:', e));
-												} else {
-													console.error('❌ ElevenLabs API failed:', result.error);
-												}
-											} catch (error) {
-												console.error('❌ ElevenLabs test error:', error);
-											}
-										}}
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#059669',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#047857'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#059669'}
-									>
-										🔧 Test API
-									</button>
-									<button
-										onClick={async () => {
-											console.log('🔊 Testing WAV format specifically...');
-											try {
-												const result = await elevenLabsService.generateSpeech('WAV test message', 'wav');
-												console.log('🔊 WAV result:', result);
-												if (result.success) {
-													console.log('✅ WAV format working');
-													// Try to play the audio
-													const audio = new Audio(result.audioUrl);
-													audio.onerror = (e) => console.error('❌ WAV audio play error:', e);
-													audio.onplay = () => console.log('✅ WAV audio playing');
-													audio.onended = () => console.log('✅ WAV audio ended');
-													audio.play().catch(e => console.error('❌ WAV audio play failed:', e));
-												} else {
-													console.error('❌ WAV format failed:', result.error);
-												}
-											} catch (error) {
-												console.error('❌ WAV test error:', error);
-											}
-										}}
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#8B5CF6',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7C3AED'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B5CF6'}
-									>
-										🎵 Test WAV
-									</button>
-									<button
-										onClick={async () => {
-											console.log('🔊 Testing Google TTS...');
-											try {
-												// Import Google TTS service dynamically
-												const { GoogleTTSService } = await import('./services/googleTTS');
-												const googleTTS = new GoogleTTSService();
-												
-												console.log('🔊 Google TTS service imported successfully');
-												
-												const result = await googleTTS.generateSpeech('Hello! This is a test of Google TTS on your robot!');
-												console.log('🔊 Google TTS result:', result);
-												
-												if (result.success && result.audioUrl) {
-													console.log('✅ Google TTS working');
-													console.log('🔊 Audio URL:', result.audioUrl);
-													console.log('🔊 Audio blob size:', result.audioBlob?.size, 'bytes');
-													
-													// Try to play the audio
-													const audio = new Audio(result.audioUrl);
-													audio.onerror = (e) => console.error('❌ Google TTS audio play error:', e);
-													audio.onplay = () => console.log('✅ Google TTS audio playing');
-													audio.onended = () => {
-														console.log('✅ Google TTS audio ended');
-														// Clean up the audio URL
-														googleTTS.cleanupAudioUrl(result.audioUrl!);
-													};
-													audio.play().catch(e => console.error('❌ Google TTS audio play failed:', e));
-												} else {
-													console.error('❌ Google TTS failed:', result.error);
-													alert(`Google TTS failed: ${result.error}`);
-												}
-											} catch (error) {
-												console.error('❌ Google TTS test error:', error);
-												alert(`Google TTS test error: ${error}`);
-											}
-										}}
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#10B981',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#059669'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10B981'}
-									>
-										🔊 Test Google TTS
-									</button>
-									<button
-										onClick={async () => {
-											console.log('🔊 Testing Google TTS API directly...');
-											try {
-												const response = await fetch('/api/google-tts', {
-													method: 'POST',
-													headers: {
-														'Content-Type': 'application/json'
-													},
-													body: JSON.stringify({ 
-														text: 'Direct API test message',
-														language: 'en'
-													})
-												});
-												
-												console.log('🔊 API Response status:', response.status);
-												console.log('🔊 API Response headers:', response.headers);
-												
-												if (response.ok) {
-													const blob = await response.blob();
-													console.log('✅ API test successful');
-													console.log('🔊 Audio blob size:', blob.size, 'bytes');
-													console.log('🔊 Audio blob type:', blob.type);
-													
-													// Try to play the audio
-													const audioUrl = URL.createObjectURL(blob);
-													const audio = new Audio(audioUrl);
-													audio.onerror = (e) => console.error('❌ API audio play error:', e);
-													audio.onplay = () => console.log('✅ API audio playing');
-													audio.onended = () => {
-														console.log('✅ API audio ended');
-														URL.revokeObjectURL(audioUrl);
-													};
-													audio.play().catch(e => console.error('❌ API audio play failed:', e));
-												} else {
-													const errorText = await response.text();
-													console.error('❌ API test failed:', response.status, errorText);
-													alert(`API test failed: ${response.status} - ${errorText}`);
-												}
-											} catch (error) {
-												console.error('❌ API test error:', error);
-												alert(`API test error: ${error}`);
-											}
-										}}
-										style={{
-											padding: '10px 20px',
-											backgroundColor: '#059669',
-											color: 'white',
-											border: 'none',
-											borderRadius: '25px',
-											fontSize: '14px',
-											cursor: 'pointer',
-											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
-										}}
-										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#047857'}
-										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#059669'}
-									>
-										🔧 Test API Route
-									</button>
-								</div>
-							</div>
+
 						</div>
 					</main>
 				</>

@@ -143,3 +143,4 @@ speaker-test -t wav -c 2 -l 1
 ```
 
 After running these commands, restart your browser and try the ElevenLabs audio again.
+sk_5c668247517fedf2e44ab09c9f287df00fcada89b8ab9ea6
