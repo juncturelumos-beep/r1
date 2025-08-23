@@ -4,8 +4,10 @@ import ColorDetectionGame from './components/ColorDetectionGame'
 import AudioPlayer from './components/AudioPlayer'
 import JitsiMeet from './components/JitsiMeet'
 import MP3Player from './components/MP3Player'
+import ElevenLabsConfig from './components/ElevenLabsConfig'
 import { createReminder, getDueRemindersForToday, toggleReminderComplete } from './services/reminders'
 import { audioGenerator, type AudioResponse } from './services/audioGenerator'
+import { elevenLabsService } from './services/elevenLabs'
 import type { ReminderFormData } from './types/reminder'
 
 type ConversationMessage = { role: 'user' | 'assistant'; content: string }
@@ -822,6 +824,8 @@ export default function Home() {
 	const [isAudioPlaying, setIsAudioPlaying] = useState(false)
 	const [useFallbackAudio, setUseFallbackAudio] = useState(false)
 	const [fallbackAudioContext, setFallbackAudioContext] = useState<AudioContext | null>(null)
+	const [showElevenLabsConfig, setShowElevenLabsConfig] = useState(false)
+	const [useElevenLabs, setUseElevenLabs] = useState(false)
 
 	// Initialize fallback audio context for Raspberry Pi compatibility
 	useEffect(() => {
@@ -874,7 +878,7 @@ export default function Home() {
 					// Try to resume immediately for Pi compatibility
 					audioContext.resume().then(() => {
 						console.log('🔊 Audio context resumed successfully');
-						setFallbackAudioContext(audioContext);
+				setFallbackAudioContext(audioContext);
 					}).catch(error => {
 						console.error('❌ Failed to resume audio context:', error);
 						// Still set it - it might work on next interaction
@@ -924,8 +928,8 @@ export default function Home() {
 				// Try to resume immediately
 				if (audioContext.state === 'suspended') {
 					try {
-						await audioContext.resume();
-						console.log('🔊 New audio context resumed successfully');
+					await audioContext.resume();
+					console.log('🔊 New audio context resumed successfully');
 					} catch (resumeError) {
 						console.error('❌ Failed to resume new audio context:', resumeError);
 						// Still set it - it might work on next interaction
@@ -946,6 +950,9 @@ export default function Home() {
 
 	// Test Web Speech API compatibility on mount
 	useEffect(() => {
+		// Immediately check ElevenLabs availability
+		checkElevenLabsAvailability();
+		
 		// Test after a short delay to ensure everything is loaded
 		const timer = setTimeout(() => {
 			testSpeechAPI();
@@ -954,11 +961,27 @@ export default function Home() {
 		return () => clearTimeout(timer);
 	}, []);
 
+	// Check ElevenLabs availability
+	const checkElevenLabsAvailability = () => {
+		// Since we have the API key hardcoded, ElevenLabs is always available
+		console.log('🔊 ElevenLabs is configured and available');
+		setUseElevenLabs(true);
+		// If ElevenLabs is available, prefer it over fallback audio
+		setUseFallbackAudio(false);
+		console.log('🔊 ElevenLabs enabled, fallback audio disabled');
+	};
+
+	// Handle ElevenLabs configuration
+	const handleElevenLabsConfigured = () => {
+		checkElevenLabsAvailability();
+		console.log('🔊 ElevenLabs configuration updated');
+	};
+
 	// Test Web Speech API compatibility
 	const testSpeechAPI = () => {
 		console.log('🔊 Testing Web Speech API compatibility...');
 		console.log('🔊 User Agent:', navigator.userAgent);
-		console.log('🔊 Platform:', navigator.platform);
+		console.log('🔊 Platform:', navigator.userAgent);
 		
 		// Check for VNC-specific indicators
 		const isVNC = navigator.userAgent.includes('VNC') || 
@@ -973,6 +996,12 @@ export default function Home() {
 		
 		console.log('🔊 VNC detected:', isVNC);
 		console.log('🔊 Raspberry Pi detected:', isRaspberryPi);
+		
+		// If ElevenLabs is available, don't force fallback audio
+		if (elevenLabsService.isConfigured()) {
+			console.log('🔊 ElevenLabs available - will use it instead of fallback audio');
+			return;
+		}
 		
 		if (isVNC || isRaspberryPi) {
 			console.log('🔊 VNC or Raspberry Pi detected - likely to have audio issues, enabling fallback');
@@ -2374,7 +2403,9 @@ export default function Home() {
 	};
 
 	const speakResponse = (text: string, pendingGame?: { game: 'tictactoe' | 'trivia' | 'sudoku' | 'color' | 'audio' | 'jitsi', aiMode: boolean } | null) => {
-
+		console.log('🔊 speakResponse called with text:', text.substring(0, 50) + '...');
+		console.log('🔊 ElevenLabs configured:', elevenLabsService.isConfigured());
+		console.log('🔊 useElevenLabs state:', useElevenLabs);
 		
 		setIsSpeaking(true)
 		setAiResponse(text)
@@ -2386,7 +2417,6 @@ export default function Home() {
 		let emergencyLaunchTimer: NodeJS.Timeout | null = null
 		if (gameToLaunch) {
 			emergencyLaunchTimer = setTimeout(() => {
-
 				if (gameToLaunch) {
 					launchGame(gameToLaunch.game, gameToLaunch.aiMode)
 					setPendingGameLaunch(null)
@@ -2395,6 +2425,13 @@ export default function Home() {
 				setAiResponse('')
 				if (!isProcessing && canStartRecognition()) startRecognition() // Restart recognition on emergency fallback
 			}, 8000)
+		}
+		
+		// PRIORITY 1: Use ElevenLabs if available (highest quality)
+		if (elevenLabsService.isConfigured()) {
+			console.log('🔊 ElevenLabs available, using for speech synthesis');
+			speakWithElevenLabs(text, gameToLaunch);
+			return;
 		}
 		
 		// Check if speech synthesis is available and enabled
@@ -2528,11 +2565,196 @@ export default function Home() {
 		return preferredVoice
 	}
 
-	// Enhanced startSpeech with fallback
-	const startSpeech = (text: string, synth: SpeechSynthesis, pendingGame?: { game: 'tictactoe' | 'trivia' | 'sudoku' | 'color' | 'audio' | 'jitsi', aiMode: boolean } | null, emergencyTimer?: NodeJS.Timeout | null) => {
-		// If fallback audio is enabled or we're on Raspberry Pi, use fallback
-		if (useFallbackAudio || navigator.userAgent.includes('Raspberry') || navigator.userAgent.includes('Linux')) {
-			console.log('🔊 Using fallback audio for Raspberry Pi compatibility');
+	// ElevenLabs speech function
+	const speakWithElevenLabs = async (text: string, pendingGame?: { game: 'tictactoe' | 'trivia' | 'sudoku' | 'color' | 'audio' | 'jitsi', aiMode: boolean } | null) => {
+		console.log('🔊 Using ElevenLabs for speech synthesis');
+		console.log('🔊 Text to speak:', text.substring(0, 50) + '...');
+		console.log('🔊 Pending game:', pendingGame);
+		console.log('🔊 Has user interacted:', hasUserInteracted);
+		
+		try {
+			setIsSpeaking(true);
+			setAiResponse(text);
+			
+			// Generate speech using ElevenLabs
+			const result = await elevenLabsService.generateSpeech(text);
+			
+			if (result.success && result.audioUrl) {
+				console.log('✅ ElevenLabs speech generated successfully');
+				console.log('🔊 Audio URL:', result.audioUrl);
+				
+				// Create audio element with better error handling
+				const audio = new Audio();
+				
+				// Add comprehensive event listeners for debugging
+				audio.onloadstart = () => {
+					console.log('🔊 ElevenLabs audio loading started');
+				};
+				
+				audio.oncanplay = () => {
+					console.log('🔊 ElevenLabs audio can play');
+				};
+				
+				audio.onplay = () => {
+					console.log('🔊 ElevenLabs audio started playing');
+				};
+				
+				audio.onended = () => {
+					console.log('🔊 ElevenLabs audio finished');
+					setIsSpeaking(false);
+					setAiResponse('');
+					
+					// Launch pending game after speech ends
+					if (pendingGame) {
+						launchGame(pendingGame.game, pendingGame.aiMode);
+						setPendingGameLaunch(null);
+					}
+					
+					// Restart recognition
+					if (!isProcessing) {
+						setTimeout(() => {
+							if (canStartRecognition()) {
+								startRecognition();
+							}
+						}, 1000);
+					}
+				};
+				
+				audio.onerror = (error) => {
+					console.error('❌ ElevenLabs audio playback error:', error);
+					console.error('❌ Audio error details:', audio.error);
+					setIsSpeaking(false);
+					setAiResponse('');
+					
+					// Fall back to text display
+					setTimeout(() => {
+						setAiResponse('');
+						
+						// Launch pending game even if audio failed
+						if (pendingGame) {
+							launchGame(pendingGame.game, pendingGame.aiMode);
+							setPendingGameLaunch(null);
+						}
+						
+						if (!isProcessing) {
+							setTimeout(() => {
+								if (canStartRecognition()) {
+									startRecognition();
+								}
+							}, 2000);
+						}
+					}, 4000);
+				};
+				
+				// Set the audio source
+				audio.src = result.audioUrl;
+				
+				// Try to play with better error handling
+				try {
+					console.log('🔊 Attempting to play ElevenLabs audio...');
+					console.log('🔊 Audio ready state:', audio.readyState);
+					
+					const playPromise = audio.play();
+					
+					if (playPromise !== undefined) {
+						playPromise.then(() => {
+							console.log('✅ ElevenLabs audio play promise resolved successfully');
+						}).catch((error) => {
+							console.error('❌ ElevenLabs audio play promise rejected:', error);
+							
+							// Check if it's an autoplay restriction
+							if (error.name === 'NotAllowedError') {
+								console.log('❌ Autoplay blocked - falling back to text display');
+								setIsSpeaking(false);
+								setAiResponse('');
+								
+								// Launch pending game even if audio failed
+								if (pendingGame) {
+									launchGame(pendingGame.game, pendingGame.aiMode);
+									setPendingGameLaunch(null);
+								}
+								
+								if (!isProcessing) {
+									setTimeout(() => {
+										if (canStartRecognition()) {
+											startRecognition();
+										}
+									}, 2000);
+								}
+							} else {
+								// Other errors - fall back to fallback audio
+								console.log('❌ Other audio error - falling back to fallback audio');
+								playFallbackAudio(text);
+								
+								// Handle game launch after fallback audio
+								if (pendingGame) {
+									setTimeout(() => {
+										launchGame(pendingGame.game, pendingGame.aiMode);
+										setPendingGameLaunch(null);
+									}, 2000);
+								}
+								
+								// Restart recognition
+								if (!isProcessing) {
+									setTimeout(() => {
+										if (canStartRecognition()) {
+											startRecognition();
+										}
+									}, 2000);
+								}
+							}
+						});
+					}
+					
+				} catch (playError) {
+					console.error('❌ ElevenLabs audio play error:', playError);
+					// Fall back to fallback audio
+					playFallbackAudio(text);
+					
+					// Handle game launch after fallback audio
+					if (pendingGame) {
+						setTimeout(() => {
+							launchGame(pendingGame.game, pendingGame.aiMode);
+							setPendingGameLaunch(null);
+						}, 2000);
+					}
+					
+					// Restart recognition
+					if (!isProcessing) {
+						setTimeout(() => {
+							if (canStartRecognition()) {
+								startRecognition();
+							}
+						}, 2000);
+					}
+				}
+				
+			} else {
+				console.error('❌ ElevenLabs speech generation failed:', result.error);
+				// Fall back to fallback audio
+				playFallbackAudio(text);
+				
+				// Handle game launch after fallback audio
+				if (pendingGame) {
+					setTimeout(() => {
+						launchGame(pendingGame.game, pendingGame.aiMode);
+						setPendingGameLaunch(null);
+					}, 2000);
+				}
+				
+				// Restart recognition
+				if (!isProcessing) {
+					setTimeout(() => {
+						if (canStartRecognition()) {
+							startRecognition();
+						}
+					}, 2000);
+				}
+			}
+			
+		} catch (error) {
+			console.error('❌ ElevenLabs speech failed:', error);
+			// Fall back to fallback audio
 			playFallbackAudio(text);
 			
 			// Handle game launch after fallback audio
@@ -2551,6 +2773,39 @@ export default function Home() {
 					}
 				}, 2000);
 			}
+		}
+	};
+
+	// Enhanced startSpeech with fallback
+	const startSpeech = (text: string, synth: SpeechSynthesis, pendingGame?: { game: 'tictactoe' | 'trivia' | 'sudoku' | 'color' | 'audio' | 'jitsi', aiMode: boolean } | null, emergencyTimer?: NodeJS.Timeout | null) => {
+		// If ElevenLabs is available, use it (highest priority)
+		if (useElevenLabs && elevenLabsService.isConfigured()) {
+			console.log('🔊 ElevenLabs available, using for speech synthesis');
+			speakWithElevenLabs(text, pendingGame);
+			return;
+		}
+		
+		// If fallback audio is enabled or we're on Raspberry Pi, use fallback
+		if (useFallbackAudio || navigator.userAgent.includes('Raspberry') || navigator.userAgent.includes('Linux')) {
+			console.log('🔊 Using fallback audio for Raspberry Pi compatibility');
+			playFallbackAudio(text);
+			
+			// Handle game launch after fallback audio
+				if (pendingGame) {
+				setTimeout(() => {
+					launchGame(pendingGame.game, pendingGame.aiMode);
+					setPendingGameLaunch(null);
+				}, 2000);
+			}
+			
+			// Restart recognition
+				if (!isProcessing) {
+					setTimeout(() => {
+						if (canStartRecognition()) {
+						startRecognition();
+					}
+				}, 2000);
+			}
 			return;
 		}
 		
@@ -2563,11 +2818,11 @@ export default function Home() {
 		
 		if (hasSpeechIssues) {
 			console.log('🔊 Platform detected as having speech synthesis issues, using fallback');
-			setUseFallbackAudio(true);
+				setUseFallbackAudio(true);
 			playFallbackAudio(text);
 			
 			// Handle game launch after fallback audio
-			if (pendingGame) {
+						if (pendingGame) {
 				setTimeout(() => {
 					launchGame(pendingGame.game, pendingGame.aiMode);
 					setPendingGameLaunch(null);
@@ -2575,9 +2830,9 @@ export default function Home() {
 			}
 			
 			// Restart recognition
-			if (!isProcessing) {
-				setTimeout(() => {
-					if (canStartRecognition()) {
+						if (!isProcessing) {
+							setTimeout(() => {
+								if (canStartRecognition()) {
 						startRecognition();
 					}
 				}, 2000);
@@ -2597,24 +2852,24 @@ export default function Home() {
 			}
 
 			utter.onend = () => {
-				if (emergencyTimer) clearTimeout(emergencyTimer)
-				setIsSpeaking(false)
-				setAiResponse('')
-				
+					if (emergencyTimer) clearTimeout(emergencyTimer)
+					setIsSpeaking(false)
+					setAiResponse('')
+					
 				// Launch pending game after speech ends
-				if (pendingGame) {
-					launchGame(pendingGame.game, pendingGame.aiMode)
-					setPendingGameLaunch(null)
-				}
-				
+					if (pendingGame) {
+						launchGame(pendingGame.game, pendingGame.aiMode)
+						setPendingGameLaunch(null)
+					}
+					
 				// Restart recognition after speech ends
-				if (!isProcessing) {
-					setTimeout(() => {
-						if (canStartRecognition()) {
-							startRecognition()
-						}
-					}, 1000)
-				}
+					if (!isProcessing) {
+						setTimeout(() => {
+							if (canStartRecognition()) {
+								startRecognition()
+							}
+						}, 1000)
+					}
 			}
 
 				utter.onerror = (event) => {
@@ -2627,30 +2882,30 @@ export default function Home() {
 		setUseFallbackAudio(true);
 		
 		// Clear emergency timer
-		if (emergencyTimer) clearTimeout(emergencyTimer)
-		setIsSpeaking(false)
+				if (emergencyTimer) clearTimeout(emergencyTimer)
+				setIsSpeaking(false)
 		
 		// Always try fallback audio first, regardless of error type
 		console.log('🔊 Attempting fallback audio...');
-		playFallbackAudio(text);
-		
-		// Launch pending game after fallback audio
-		if (pendingGame) {
-			setTimeout(() => {
-				launchGame(pendingGame.game, pendingGame.aiMode)
-				setPendingGameLaunch(null)
-			}, 2000)
-		}
-		
-		// Restart recognition
-		if (!isProcessing) {
-			setTimeout(() => {
-				if (canStartRecognition()) {
-					startRecognition()
+				playFallbackAudio(text);
+				
+				// Launch pending game after fallback audio
+				if (pendingGame) {
+					setTimeout(() => {
+						launchGame(pendingGame.game, pendingGame.aiMode)
+						setPendingGameLaunch(null)
+					}, 2000)
 				}
-			}, 2000)
-		}
-	}
+				
+				// Restart recognition
+				if (!isProcessing) {
+					setTimeout(() => {
+						if (canStartRecognition()) {
+							startRecognition()
+						}
+					}, 2000)
+				}
+			}
 
 			// Try to speak
 			synth.speak(utter)
@@ -2896,8 +3151,30 @@ export default function Home() {
 								</div>
 							)}
 
+							{/* ElevenLabs Status */}
+							{useElevenLabs && (
+								<div className="elevenlabs-status" style={{ 
+									position: 'absolute', 
+									top: '60px', 
+									right: '20px',
+									padding: '8px 16px',
+									backgroundColor: '#10B981',
+									color: 'white',
+									borderRadius: '20px',
+									fontSize: '12px',
+									fontWeight: 'bold',
+									boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+									zIndex: 1000,
+									animation: 'userInteractionPulse 2s infinite'
+								}}>
+									🎵 ElevenLabs TTS Active
+									<br />
+									<small>High-quality speech synthesis</small>
+								</div>
+							)}
+
 							{/* Fallback Audio Status */}
-							{useFallbackAudio && (
+							{useFallbackAudio && !useElevenLabs && (
 								<div className="fallback-audio-status" style={{ 
 									position: 'absolute', 
 									top: '60px', 
@@ -3068,6 +3345,25 @@ export default function Home() {
 									>
 										🔊 Audio Test
 									</a>
+									<a
+										href="/elevenlabs-debug"
+										style={{
+											padding: '10px 20px',
+											backgroundColor: '#8B5CF6',
+											color: 'white',
+											border: 'none',
+											borderRadius: '25px',
+											fontSize: '14px',
+											cursor: 'pointer',
+											boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+											textDecoration: 'none',
+											display: 'inline-block'
+										}}
+										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7C3AED'}
+										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B5CF6'}
+									>
+										🔧 ElevenLabs Debug
+									</a>
 									<button
 										onClick={() => {
 											console.log('🔊 Testing fallback audio system...');
@@ -3110,6 +3406,101 @@ export default function Home() {
 										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DC2626'}
 									>
 										🔧 Force Fallback
+									</button>
+									<button
+										onClick={() => setShowElevenLabsConfig(true)}
+										style={{
+											padding: '10px 20px',
+											backgroundColor: '#8B5CF6',
+											color: 'white',
+											border: 'none',
+											borderRadius: '25px',
+											fontSize: '14px',
+											cursor: 'pointer',
+											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+										}}
+										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#7C3AED'}
+										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B5CF6'}
+									>
+										🎵 ElevenLabs
+									</button>
+									<button
+										onClick={() => {
+											console.log('🔊 Manual ElevenLabs check...');
+											console.log('🔊 ElevenLabs configured:', elevenLabsService.isConfigured());
+											console.log('🔊 useElevenLabs state:', useElevenLabs);
+											checkElevenLabsAvailability();
+										}}
+										style={{
+											padding: '10px 20px',
+											backgroundColor: '#059669',
+											color: 'white',
+											border: 'none',
+											borderRadius: '25px',
+											fontSize: '14px',
+											cursor: 'pointer',
+											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+										}}
+										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#047857'}
+										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+									>
+										🔍 Check Status
+									</button>
+									<button
+										onClick={() => {
+											console.log('🔊 Testing ElevenLabs speech directly...');
+											speakWithElevenLabs('Hello! This is a test of ElevenLabs TTS on your robot!', null);
+										}}
+										style={{
+											padding: '10px 20px',
+											backgroundColor: '#DC2626',
+											color: 'white',
+											border: 'none',
+											borderRadius: '25px',
+											fontSize: '14px',
+											cursor: 'pointer',
+											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+										}}
+										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#B91C1C'}
+										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DC2626'}
+									>
+										🎵 Test Speech
+									</button>
+									<button
+										onClick={async () => {
+											console.log('🔊 Testing ElevenLabs API directly...');
+											try {
+												const result = await elevenLabsService.generateSpeech('Test message');
+												console.log('🔊 ElevenLabs result:', result);
+												if (result.success) {
+													console.log('✅ ElevenLabs API working');
+													// Try to play the audio
+													const audio = new Audio(result.audioUrl);
+													audio.onerror = (e) => console.error('❌ Audio play error:', e);
+													audio.onplay = () => console.log('✅ Audio playing');
+													audio.onended = () => console.log('✅ Audio ended');
+													audio.play().catch(e => console.error('❌ Audio play failed:', e));
+												} else {
+													console.error('❌ ElevenLabs API failed:', result.error);
+												}
+											} catch (error) {
+												console.error('❌ ElevenLabs test error:', error);
+											}
+										}}
+										style={{
+											padding: '10px 20px',
+											backgroundColor: '#059669',
+											color: 'white',
+											border: 'none',
+											borderRadius: '25px',
+											fontSize: '14px',
+											cursor: 'pointer',
+											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+										}}
+										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#047857'}
+										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+									>
+										🔧 Test API
 									</button>
 								</div>
 							</div>
@@ -3163,6 +3554,14 @@ export default function Home() {
 					duration={currentMP3Data.duration}
 					onClose={handleMP3PlayerClose}
 					onDelete={handleMP3PlayerDelete}
+				/>
+			)}
+			
+			{/* ElevenLabs Configuration Modal */}
+			{showElevenLabsConfig && (
+				<ElevenLabsConfig
+					onClose={() => setShowElevenLabsConfig(false)}
+					onConfigured={handleElevenLabsConfigured}
 				/>
 			)}
 		</>
