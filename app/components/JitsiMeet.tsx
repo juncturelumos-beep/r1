@@ -10,7 +10,7 @@ export default function JitsiMeet({ onClose }: JitsiMeetProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
-  const jitsiUrl = 'https://meet.jit.si/?rCounter=1';
+  const jitsiUrl = 'https://meet.jsi.si/Antarameet';
 
   const handleLoad = () => {
     setIsLoading(false);

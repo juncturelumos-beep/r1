@@ -826,6 +826,7 @@ export default function Home() {
 	const [fallbackAudioContext, setFallbackAudioContext] = useState<AudioContext | null>(null)
 	const [showElevenLabsConfig, setShowElevenLabsConfig] = useState(false)
 	const [useElevenLabs, setUseElevenLabs] = useState(false)
+	const [useGoogleTTS, setUseGoogleTTS] = useState(true) // Default to Google TTS
 
 	// Initialize fallback audio context for Raspberry Pi compatibility
 	useEffect(() => {
@@ -963,12 +964,13 @@ export default function Home() {
 
 	// Check ElevenLabs availability
 	const checkElevenLabsAvailability = () => {
-		// Since we have the API key hardcoded, ElevenLabs is always available
+		// Since we have the API key hardcoded, ElevenLabs is available
 		console.log('🔊 ElevenLabs is configured and available');
-		setUseElevenLabs(true);
-		// If ElevenLabs is available, prefer it over fallback audio
+		// But we prefer Google TTS as default (free, always available)
+		setUseElevenLabs(false);
+		setUseGoogleTTS(true);
 		setUseFallbackAudio(false);
-		console.log('🔊 ElevenLabs enabled, fallback audio disabled');
+		console.log('🔊 Google TTS set as default, ElevenLabs available as backup');
 	};
 
 	// Handle ElevenLabs configuration
@@ -1333,12 +1335,12 @@ export default function Home() {
 			let final = ''
 			
 			try {
-				for (let i = event.resultIndex; i < event.results.length; ++i) {
-					if (event.results[i].isFinal) {
-						final += event.results[i][0].transcript
-					} else {
-						interim += event.results[i][0].transcript
-					}
+			for (let i = event.resultIndex; i < event.results.length; ++i) {
+				if (event.results[i].isFinal) {
+					final += event.results[i][0].transcript
+				} else {
+					interim += event.results[i][0].transcript
+				}
 				}
 			} catch (e) {
 				console.error('Error processing recognition results:', e)
@@ -1418,11 +1420,11 @@ export default function Home() {
 			} else {
 				console.log('🔄 Other error - restarting after longer delay')
 				// Restart on other errors if we should still be listening, but with much longer delay
-				if (shouldListenRef.current && !isSpeaking && !isProcessing) {
-					setTimeout(() => {
-						if (canStartRecognition()) {
-							startRecognition()
-						}
+			if (shouldListenRef.current && !isSpeaking && !isProcessing) {
+				setTimeout(() => {
+					if (canStartRecognition()) {
+						startRecognition()
+					}
 					}, 8000) // Much longer delay for error recovery to prevent loops
 				}
 			}
@@ -1750,7 +1752,7 @@ export default function Home() {
 			// Start recognition if it's not already running and not in the middle of starting/stopping
 			if (!isListening && recognitionRef.current && !isStartingRef.current && !isStoppingRef.current) {
 				console.log('🔄 Recognition management: starting recognition');
-				
+
 				setTimeout(() => {
 					if (canStartRecognition()) {
 						startRecognition();
@@ -1801,26 +1803,26 @@ export default function Home() {
 		const speechMonitor = setInterval(() => {
 			if (typeof window !== 'undefined' && window.speechSynthesis) {
 				try {
-					// If we think we're speaking but synthesis says we're not, clean up
-					if (isSpeaking && !window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+				// If we think we're speaking but synthesis says we're not, clean up
+				if (isSpeaking && !window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
 						console.log('🔊 Speech synthesis monitor: cleaning up stuck speaking state');
 						setIsSpeaking(false);
 						setAiResponse('');
-						
+
 						// Restart recognition with better timing
-						if (!isProcessing && !isStartingRef.current) {
-							setTimeout(() => {
-								if (canStartRecognition()) {
+					if (!isProcessing && !isStartingRef.current) {
+						setTimeout(() => {
+							if (canStartRecognition()) {
 									console.log('🔄 Restarting recognition after speech cleanup');
 									startRecognition();
-								}
+							}
 							}, 1500); // Reduced delay for better responsiveness
-						}
 					}
+				}
 				} catch (error) {
 					console.error('🔊 Speech synthesis monitor error:', error);
 					// Don't crash the monitor, just log the error
-				}
+			}
 			}
 		}, 1500); // Check every 1.5 seconds for better responsiveness
 
@@ -1831,20 +1833,20 @@ export default function Home() {
 	useEffect(() => {
 		const healthCheck = setInterval(() => {
 			try {
-				// Only restart if we should be listening, recognition isn't active, and we're not in the middle of starting/stopping
-				if (shouldListenRef.current && 
-					!isListening && 
-					recognitionRef.current && 
-					!isSpeaking && 
-					!isProcessing && 
-					!isStartingRef.current && 
-					!isStoppingRef.current) {
-					
+			// Only restart if we should be listening, recognition isn't active, and we're not in the middle of starting/stopping
+			if (shouldListenRef.current && 
+				!isListening && 
+				recognitionRef.current && 
+				!isSpeaking && 
+				!isProcessing && 
+				!isStartingRef.current && 
+				!isStoppingRef.current) {
+				
 					console.log('🔍 Recognition health check: restarting inactive recognition');
-					
+
 					// Use a longer delay to avoid conflicts with other restart attempts
-					setTimeout(() => {
-						if (canStartRecognition()) {
+				setTimeout(() => {
+					if (canStartRecognition()) {
 							console.log('🔄 Health check restarting recognition');
 							startRecognition();
 						}
@@ -2427,12 +2429,13 @@ export default function Home() {
 			}, 8000)
 		}
 		
-		// PRIORITY 1: Use ElevenLabs if available (highest quality)
-		if (elevenLabsService.isConfigured()) {
-			console.log('🔊 ElevenLabs available, using for speech synthesis');
-			speakWithElevenLabs(text, gameToLaunch);
-			return;
-		}
+		// PRIORITY 1: Use Google TTS by default (free, high quality, always available)
+		console.log('🔊 Using Google TTS as default speech synthesis');
+		speakWithGoogleTTS(text, gameToLaunch);
+		return;
+		
+		// Note: ElevenLabs and fallback audio are now only used if Google TTS fails
+		// Google TTS is the primary method for all speech synthesis
 		
 		// Check if speech synthesis is available and enabled
 		if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -2603,17 +2606,17 @@ export default function Home() {
 					console.log('🔊 ElevenLabs audio finished');
 					setIsSpeaking(false);
 					setAiResponse('');
-					
-					// Launch pending game after speech ends
-					if (pendingGame) {
+				
+				// Launch pending game after speech ends
+				if (pendingGame) {
 						launchGame(pendingGame.game, pendingGame.aiMode);
 						setPendingGameLaunch(null);
-					}
-					
+				}
+				
 					// Restart recognition
-					if (!isProcessing) {
-						setTimeout(() => {
-							if (canStartRecognition()) {
+				if (!isProcessing) {
+					setTimeout(() => {
+						if (canStartRecognition()) {
 								startRecognition();
 							}
 						}, 1000);
@@ -2675,7 +2678,7 @@ export default function Home() {
 								}
 								
 								if (!isProcessing) {
-									setTimeout(() => {
+					setTimeout(() => {
 										if (canStartRecognition()) {
 											startRecognition();
 										}
@@ -2687,7 +2690,7 @@ export default function Home() {
 								playFallbackAudio(text);
 								
 								// Handle game launch after fallback audio
-								if (pendingGame) {
+						if (pendingGame) {
 									setTimeout(() => {
 										launchGame(pendingGame.game, pendingGame.aiMode);
 										setPendingGameLaunch(null);
@@ -2695,9 +2698,9 @@ export default function Home() {
 								}
 								
 								// Restart recognition
-								if (!isProcessing) {
-									setTimeout(() => {
-										if (canStartRecognition()) {
+						if (!isProcessing) {
+							setTimeout(() => {
+								if (canStartRecognition()) {
 											startRecognition();
 										}
 									}, 2000);
@@ -2736,7 +2739,7 @@ export default function Home() {
 				
 				// Handle game launch after fallback audio
 				if (pendingGame) {
-					setTimeout(() => {
+				setTimeout(() => {
 						launchGame(pendingGame.game, pendingGame.aiMode);
 						setPendingGameLaunch(null);
 					}, 2000);
@@ -2754,6 +2757,221 @@ export default function Home() {
 			
 		} catch (error) {
 			console.error('❌ ElevenLabs speech failed:', error);
+			// Fall back to fallback audio
+			playFallbackAudio(text);
+			
+			// Handle game launch after fallback audio
+					if (pendingGame) {
+				setTimeout(() => {
+					launchGame(pendingGame.game, pendingGame.aiMode);
+					setPendingGameLaunch(null);
+				}, 2000);
+			}
+			
+			// Restart recognition
+					if (!isProcessing) {
+						setTimeout(() => {
+							if (canStartRecognition()) {
+						startRecognition();
+					}
+				}, 2000);
+			}
+		}
+	};
+
+	// Google TTS speech function
+	const speakWithGoogleTTS = async (text: string, pendingGame?: { game: 'tictactoe' | 'trivia' | 'sudoku' | 'color' | 'audio' | 'jitsi', aiMode: boolean } | null) => {
+		console.log('🔊 Using Google TTS for speech synthesis');
+		console.log('🔊 Text to speak:', text.substring(0, 50) + '...');
+		console.log('🔊 Pending game:', pendingGame);
+		console.log('🔊 Has user interacted:', hasUserInteracted);
+		
+		try {
+			setIsSpeaking(true);
+			setAiResponse(text);
+			
+			// Import Google TTS service dynamically
+			const { GoogleTTSService } = await import('./services/googleTTS');
+			const googleTTS = new GoogleTTSService();
+			
+			// Generate speech using Google TTS
+			const result = await googleTTS.generateSpeech(text);
+			
+			if (result.success && result.audioUrl) {
+				console.log('✅ Google TTS speech generated successfully');
+				console.log('🔊 Audio URL:', result.audioUrl);
+				
+				// Create audio element with better error handling
+				const audio = new Audio();
+				
+				// Add comprehensive event listeners for debugging
+				audio.onloadstart = () => {
+					console.log('🔊 Google TTS audio loading started');
+				};
+				
+				audio.oncanplay = () => {
+					console.log('🔊 Google TTS audio can play');
+				};
+				
+				audio.onplay = () => {
+					console.log('🔊 Google TTS audio started playing');
+				};
+				
+				audio.onended = () => {
+					console.log('🔊 Google TTS audio finished');
+					setIsSpeaking(false);
+					setAiResponse('');
+				
+					// Launch pending game after speech ends
+					if (pendingGame) {
+						launchGame(pendingGame.game, pendingGame.aiMode);
+						setPendingGameLaunch(null);
+					}
+				
+					// Restart recognition
+					if (!isProcessing) {
+						setTimeout(() => {
+							if (canStartRecognition()) {
+								startRecognition();
+							}
+						}, 1000);
+					}
+				};
+				
+				audio.onerror = (error) => {
+					console.error('❌ Google TTS audio playback error:', error);
+					console.error('❌ Audio error details:', audio.error);
+					setIsSpeaking(false);
+					setAiResponse('');
+					
+					// Fall back to text display
+					setTimeout(() => {
+						setAiResponse('');
+						
+						// Launch pending game even if audio failed
+						if (pendingGame) {
+							launchGame(pendingGame.game, pendingGame.aiMode);
+							setPendingGameLaunch(null);
+						}
+						
+						if (!isProcessing) {
+							setTimeout(() => {
+								if (canStartRecognition()) {
+									startRecognition();
+								}
+							}, 2000);
+						}
+					}, 4000);
+				};
+				
+				// Set the audio source
+				audio.src = result.audioUrl;
+				
+				// Try to play with better error handling
+				try {
+					console.log('🔊 Attempting to play Google TTS audio...');
+					console.log('🔊 Audio ready state:', audio.readyState);
+					
+					const playPromise = audio.play();
+					
+					if (playPromise !== undefined) {
+						playPromise.then(() => {
+							console.log('✅ Google TTS audio play promise resolved successfully');
+						}).catch((error) => {
+							console.error('❌ Google TTS audio play promise rejected:', error);
+							
+							// Check if it's an autoplay restriction
+							if (error.name === 'NotAllowedError') {
+								console.log('❌ Autoplay blocked - falling back to text display');
+								setIsSpeaking(false);
+								setAiResponse('');
+								
+								// Launch pending game even if audio failed
+								if (pendingGame) {
+									launchGame(pendingGame.game, pendingGame.aiMode);
+									setPendingGameLaunch(null);
+								}
+								
+								if (!isProcessing) {
+									setTimeout(() => {
+										if (canStartRecognition()) {
+											startRecognition();
+										}
+									}, 2000);
+								}
+							} else {
+								// Other errors - fall back to fallback audio
+								console.log('❌ Other audio error - falling back to fallback audio');
+								playFallbackAudio(text);
+								
+								// Handle game launch after fallback audio
+								if (pendingGame) {
+									setTimeout(() => {
+										launchGame(pendingGame.game, pendingGame.aiMode);
+										setPendingGameLaunch(null);
+									}, 2000);
+								}
+								
+								// Restart recognition
+								if (!isProcessing) {
+									setTimeout(() => {
+										if (canStartRecognition()) {
+											startRecognition();
+										}
+									}, 2000);
+								}
+							}
+						});
+					}
+					
+				} catch (playError) {
+					console.error('❌ Google TTS audio play error:', playError);
+					// Fall back to fallback audio
+					playFallbackAudio(text);
+					
+					// Handle game launch after fallback audio
+					if (pendingGame) {
+						setTimeout(() => {
+							launchGame(pendingGame.game, pendingGame.aiMode);
+							setPendingGameLaunch(null);
+						}, 2000);
+					}
+					
+					// Restart recognition
+					if (!isProcessing) {
+						setTimeout(() => {
+							if (canStartRecognition()) {
+								startRecognition();
+							}
+						}, 2000);
+					}
+				}
+				
+			} else {
+				console.error('❌ Google TTS speech generation failed:', result.error);
+				// Fall back to fallback audio
+				playFallbackAudio(text);
+				
+				// Handle game launch after fallback audio
+				if (pendingGame) {
+					setTimeout(() => {
+						launchGame(pendingGame.game, pendingGame.aiMode);
+						setPendingGameLaunch(null);
+					}, 2000);
+				}
+				
+				// Restart recognition
+				if (!isProcessing) {
+					setTimeout(() => {
+						if (canStartRecognition()) {
+							startRecognition();
+						}
+					}, 2000);
+				}
+			}
+			
+		} catch (error) {
+			console.error('❌ Google TTS speech failed:', error);
 			// Fall back to fallback audio
 			playFallbackAudio(text);
 			
@@ -2778,12 +2996,13 @@ export default function Home() {
 
 	// Enhanced startSpeech with fallback
 	const startSpeech = (text: string, synth: SpeechSynthesis, pendingGame?: { game: 'tictactoe' | 'trivia' | 'sudoku' | 'color' | 'audio' | 'jitsi', aiMode: boolean } | null, emergencyTimer?: NodeJS.Timeout | null) => {
-		// If ElevenLabs is available, use it (highest priority)
-		if (useElevenLabs && elevenLabsService.isConfigured()) {
-			console.log('🔊 ElevenLabs available, using for speech synthesis');
-			speakWithElevenLabs(text, pendingGame);
-			return;
-		}
+		// Always use Google TTS by default (free, high quality, always available)
+		console.log('🔊 Using Google TTS as default speech synthesis');
+		speakWithGoogleTTS(text, pendingGame);
+		return;
+		
+		// Note: ElevenLabs and fallback audio are now only used if Google TTS fails
+		// Google TTS is the primary method for all speech synthesis
 		
 		// If fallback audio is enabled or we're on Raspberry Pi, use fallback
 		if (useFallbackAudio || navigator.userAgent.includes('Raspberry') || navigator.userAgent.includes('Linux')) {
@@ -2870,7 +3089,7 @@ export default function Home() {
 							}
 						}, 1000)
 					}
-			}
+				}
 
 				utter.onerror = (event) => {
 		// Handle specific error types - note: TypeScript may not include all possible error types
@@ -2883,7 +3102,7 @@ export default function Home() {
 		
 		// Clear emergency timer
 				if (emergencyTimer) clearTimeout(emergencyTimer)
-				setIsSpeaking(false)
+			setIsSpeaking(false)
 		
 		// Always try fallback audio first, regardless of error type
 		console.log('🔊 Attempting fallback audio...');
@@ -2891,7 +3110,7 @@ export default function Home() {
 				
 				// Launch pending game after fallback audio
 				if (pendingGame) {
-					setTimeout(() => {
+			setTimeout(() => {
 						launchGame(pendingGame.game, pendingGame.aiMode)
 						setPendingGameLaunch(null)
 					}, 2000)
@@ -2922,20 +3141,20 @@ export default function Home() {
 			playFallbackAudio(text)
 			
 			// Handle game launch and recognition restart
-			if (pendingGame) {
+				if (pendingGame) {
 				setTimeout(() => {
 					launchGame(pendingGame.game, pendingGame.aiMode)
 					setPendingGameLaunch(null)
 				}, 2000)
-			}
-			
-			if (!isProcessing) {
-				setTimeout(() => {
-					if (canStartRecognition()) {
-						startRecognition()
-					}
+				}
+				
+				if (!isProcessing) {
+					setTimeout(() => {
+						if (canStartRecognition()) {
+							startRecognition()
+						}
 				}, 2000)
-			}
+				}
 		}
 	}
 
@@ -3152,10 +3371,32 @@ export default function Home() {
 							)}
 
 							{/* ElevenLabs Status */}
-							{useElevenLabs && (
+							{useElevenLabs && !useGoogleTTS && (
 								<div className="elevenlabs-status" style={{ 
 									position: 'absolute', 
 									top: '60px', 
+									right: '20px',
+									padding: '8px 16px',
+									backgroundColor: '#8B5CF6',
+									color: 'white',
+									borderRadius: '20px',
+									fontSize: '12px',
+									fontWeight: 'bold',
+									boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+									zIndex: 1000,
+									animation: 'userInteractionPulse 2s infinite'
+								}}>
+									🎵 ElevenLabs Available
+									<br />
+									<small>Premium backup TTS</small>
+								</div>
+							)}
+
+							{/* Google TTS Status */}
+							{useGoogleTTS && (
+								<div className="google-tts-status" style={{ 
+									position: 'absolute', 
+									top: '100px', 
 									right: '20px',
 									padding: '8px 16px',
 									backgroundColor: '#10B981',
@@ -3167,17 +3408,17 @@ export default function Home() {
 									zIndex: 1000,
 									animation: 'userInteractionPulse 2s infinite'
 								}}>
-									🎵 ElevenLabs TTS Active
+									🔊 Google TTS Default
 									<br />
-									<small>High-quality speech synthesis</small>
+									<small>Primary speech synthesis</small>
 								</div>
 							)}
 
 							{/* Fallback Audio Status */}
-							{useFallbackAudio && !useElevenLabs && (
+							{useFallbackAudio && !useElevenLabs && !useGoogleTTS && (
 								<div className="fallback-audio-status" style={{ 
 									position: 'absolute', 
-									top: '60px', 
+									top: '140px', 
 									right: '20px',
 									padding: '8px 16px',
 									backgroundColor: '#F59E0B',
@@ -3199,7 +3440,7 @@ export default function Home() {
 							{!hasUserInteracted && (
 								<div className="user-interaction-status" style={{ 
 									position: 'absolute', 
-									top: '100px', 
+									top: '180px', 
 									right: '20px',
 									padding: '8px 16px',
 									backgroundColor: '#EF4444',
@@ -3219,7 +3460,7 @@ export default function Home() {
 							{showMP3Player && currentMP3Data && (
 								<div className="mp3-available-status" style={{ 
 									position: 'absolute', 
-									top: '140px', 
+									top: '220px', 
 									right: '20px',
 									padding: '8px 16px',
 									backgroundColor: '#10B981',
@@ -3425,6 +3666,83 @@ export default function Home() {
 										🎵 ElevenLabs
 									</button>
 									<button
+										onClick={async () => {
+											console.log('🔊 Enabling Google TTS...');
+											try {
+												// Import Google TTS service dynamically
+												const { GoogleTTSService } = await import('./services/googleTTS');
+												const googleTTS = new GoogleTTSService();
+												
+												// Test Google TTS with a simple message
+												const result = await googleTTS.generateSpeech('Google TTS is now enabled!');
+												
+												if (result.success && result.audioUrl) {
+													console.log('✅ Google TTS enabled successfully');
+													
+													// Play the test message
+													const audio = new Audio(result.audioUrl);
+													audio.onerror = (e) => console.error('❌ Google TTS audio play error:', e);
+													audio.onplay = () => console.log('✅ Google TTS audio playing');
+													audio.onended = () => {
+														console.log('✅ Google TTS audio ended');
+														// Clean up the audio URL
+														googleTTS.cleanupAudioUrl(result.audioUrl!);
+													};
+													
+													// Set Google TTS as the preferred method
+													setUseElevenLabs(false);
+													setUseFallbackAudio(false);
+													setUseGoogleTTS(true);
+													
+													audio.play().catch(e => console.error('❌ Google TTS audio play failed:', e));
+												} else {
+													console.error('❌ Google TTS failed:', result.error);
+													alert('Failed to enable Google TTS. Please check the console for details.');
+												}
+											} catch (error) {
+												console.error('❌ Google TTS enable error:', error);
+												alert('Failed to enable Google TTS. Please check the console for details.');
+											}
+										}}
+										style={{
+											padding: '10px 20px',
+											backgroundColor: '#10B981',
+											color: 'white',
+											border: 'none',
+											borderRadius: '25px',
+											fontSize: '14px',
+											cursor: 'pointer',
+											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+										}}
+										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10B981'}
+									>
+										🔊 Enable Google TTS
+									</button>
+									<button
+										onClick={() => {
+											console.log('🔊 Disabling Google TTS...');
+											setUseGoogleTTS(false);
+											setUseElevenLabs(true);
+											setUseFallbackAudio(false);
+											console.log('✅ Google TTS disabled, ElevenLabs re-enabled');
+										}}
+										style={{
+											padding: '10px 20px',
+											backgroundColor: '#DC2626',
+											color: 'white',
+											border: 'none',
+											borderRadius: '25px',
+											fontSize: '14px',
+											cursor: 'pointer',
+											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+										}}
+										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#B91C1C'}
+										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#DC2626'}
+									>
+										🔇 Disable Google TTS
+									</button>
+									<button
 										onClick={() => {
 											console.log('🔊 Manual ElevenLabs check...');
 											console.log('🔊 ElevenLabs configured:', elevenLabsService.isConfigured());
@@ -3537,6 +3855,117 @@ export default function Home() {
 										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B5CF6'}
 									>
 										🎵 Test WAV
+									</button>
+									<button
+										onClick={async () => {
+											console.log('🔊 Testing Google TTS...');
+											try {
+												// Import Google TTS service dynamically
+												const { GoogleTTSService } = await import('./services/googleTTS');
+												const googleTTS = new GoogleTTSService();
+												
+												console.log('🔊 Google TTS service imported successfully');
+												
+												const result = await googleTTS.generateSpeech('Hello! This is a test of Google TTS on your robot!');
+												console.log('🔊 Google TTS result:', result);
+												
+												if (result.success && result.audioUrl) {
+													console.log('✅ Google TTS working');
+													console.log('🔊 Audio URL:', result.audioUrl);
+													console.log('🔊 Audio blob size:', result.audioBlob?.size, 'bytes');
+													
+													// Try to play the audio
+													const audio = new Audio(result.audioUrl);
+													audio.onerror = (e) => console.error('❌ Google TTS audio play error:', e);
+													audio.onplay = () => console.log('✅ Google TTS audio playing');
+													audio.onended = () => {
+														console.log('✅ Google TTS audio ended');
+														// Clean up the audio URL
+														googleTTS.cleanupAudioUrl(result.audioUrl!);
+													};
+													audio.play().catch(e => console.error('❌ Google TTS audio play failed:', e));
+												} else {
+													console.error('❌ Google TTS failed:', result.error);
+													alert(`Google TTS failed: ${result.error}`);
+												}
+											} catch (error) {
+												console.error('❌ Google TTS test error:', error);
+												alert(`Google TTS test error: ${error}`);
+											}
+										}}
+										style={{
+											padding: '10px 20px',
+											backgroundColor: '#10B981',
+											color: 'white',
+											border: 'none',
+											borderRadius: '25px',
+											fontSize: '14px',
+											cursor: 'pointer',
+											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+										}}
+										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10B981'}
+									>
+										🔊 Test Google TTS
+									</button>
+									<button
+										onClick={async () => {
+											console.log('🔊 Testing Google TTS API directly...');
+											try {
+												const response = await fetch('/api/google-tts', {
+													method: 'POST',
+													headers: {
+														'Content-Type': 'application/json'
+													},
+													body: JSON.stringify({ 
+														text: 'Direct API test message',
+														language: 'en'
+													})
+												});
+												
+												console.log('🔊 API Response status:', response.status);
+												console.log('🔊 API Response headers:', response.headers);
+												
+												if (response.ok) {
+													const blob = await response.blob();
+													console.log('✅ API test successful');
+													console.log('🔊 Audio blob size:', blob.size, 'bytes');
+													console.log('🔊 Audio blob type:', blob.type);
+													
+													// Try to play the audio
+													const audioUrl = URL.createObjectURL(blob);
+													const audio = new Audio(audioUrl);
+													audio.onerror = (e) => console.error('❌ API audio play error:', e);
+													audio.onplay = () => console.log('✅ API audio playing');
+													audio.onended = () => {
+														console.log('✅ API audio ended');
+														URL.revokeObjectURL(audioUrl);
+													};
+													audio.play().catch(e => console.error('❌ API audio play failed:', e));
+												} else {
+													const errorText = await response.text();
+													console.error('❌ API test failed:', response.status, errorText);
+													alert(`API test failed: ${response.status} - ${errorText}`);
+												}
+											} catch (error) {
+												console.error('❌ API test error:', error);
+												alert(`API test error: ${error}`);
+											}
+										}}
+										style={{
+											padding: '10px 20px',
+											backgroundColor: '#059669',
+											color: 'white',
+											border: 'none',
+											borderRadius: '25px',
+											fontSize: '14px',
+											cursor: 'pointer',
+											boxShadow: '0 4px 8px rgba(0,0,0,0.3)'
+										}}
+										onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#047857'}
+										onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+									>
+										🔧 Test API Route
 									</button>
 								</div>
 							</div>

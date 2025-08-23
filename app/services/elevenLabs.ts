@@ -9,7 +9,7 @@ export interface ElevenLabsResponse {
 }
 
 export class ElevenLabsService {
-  private apiKey: string = 'sk_e3779ac57bc219adda7ab91f0a78677b70a2750eed8745db'; // Your API key
+  private apiKey: string = 'sk_5c668247517fedf2e44ab09c9f287df00fcada89b8ab9ea6'; // Your API key
   private voiceId: string = '21m00Tcm4TlvDq8ikWAM'; // Default voice: Rachel
   private baseUrl: string = 'https://api.elevenlabs.io/v1';
 
